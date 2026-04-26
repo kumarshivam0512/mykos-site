@@ -5,11 +5,17 @@ import Lenis from "lenis";
 
 export function SmoothScroll() {
   useEffect(() => {
+    // Skip on touch devices (native scroll is smoother) + respect reduced-motion preference
+    const isTouch = window.matchMedia("(pointer: coarse)").matches;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (isTouch || reduced) return;
+
     const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      duration: 0.9,
+      // Tighter lerp = fewer interpolated frames = less work for every useScroll/useTransform downstream
+      lerp: 0.18,
       smoothWheel: true,
-      lerp: 0.1,
+      wheelMultiplier: 1,
     });
 
     let frame: number;

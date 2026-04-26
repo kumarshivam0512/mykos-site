@@ -37,7 +37,7 @@ export function Hero() {
     >
       {/* glowing orb */}
       <motion.div
-        style={{ y: orbY, scale: orbScale, rotate: orbRotate }}
+        style={{ y: orbY, scale: orbScale, rotate: orbRotate, willChange: "transform" }}
         className="orb absolute top-[55%] left-1/2 -translate-x-1/2 -translate-y-1/2 h-[460px] w-[460px] sm:h-[640px] sm:w-[640px] rounded-full opacity-70 -z-10"
       />
 

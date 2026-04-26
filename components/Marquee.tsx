@@ -39,7 +39,7 @@ export function Marquee({
   return (
     <section ref={ref} className={`relative overflow-hidden py-32 ${className}`}>
       <motion.div
-        style={{ x }}
+        style={{ x, willChange: "transform" }}
         className="font-display italic text-[18vw] sm:text-[16vw] leading-[0.9] whitespace-nowrap select-none gradient-text opacity-90"
       >
         {repeated}
