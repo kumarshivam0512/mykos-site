@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { CSSProperties } from "react";
+import type { CSSProperties, JSX } from "react";
 
 interface Props {
   text: string;
