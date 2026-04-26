@@ -42,9 +42,9 @@ export function Platforms() {
               viewport={{ once: false }}
               transition={{ duration: 0.6, delay: i * 0.1, ease: [0.25, 1, 0.5, 1] }}
               whileHover={{ y: -6 }}
-              className="group relative p-7 rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-sm hover:border-white/25 hover:bg-white/[0.04] transition-all overflow-hidden"
+              className="group relative p-7 rounded-3xl border border-white/15 bg-white/[0.04] backdrop-blur-sm hover:border-white/30 hover:bg-white/[0.07] transition-all overflow-hidden"
             >
-              <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/30 to-fuchsia-500/30 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-gradient-to-br from-violet-400/50 to-pink-500/50 blur-2xl opacity-30 group-hover:opacity-90 transition-opacity duration-500" />
               <div className="relative">
                 <div className="font-display text-4xl mb-3 gradient-text">{p.name}</div>
                 <div className="text-sm text-white/50 leading-relaxed">{p.note}</div>

@@ -33,10 +33,10 @@ export function CTA() {
         whileInView={{ opacity: 1, scale: 1, y: 0 }}
         viewport={{ once: true, margin: "-100px" }}
         transition={{ duration: 0.8, ease: [0.25, 1, 0.5, 1] }}
-        className="relative max-w-4xl mx-auto rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.01] backdrop-blur p-12 sm:p-20 text-center overflow-hidden"
+        className="relative max-w-4xl mx-auto rounded-[2.5rem] border border-white/15 bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur p-12 sm:p-20 text-center overflow-hidden"
       >
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-80 w-[120%] rounded-full bg-gradient-to-br from-indigo-500/25 via-fuchsia-500/20 to-transparent blur-3xl" />
-        <div className="absolute -bottom-32 right-0 h-64 w-64 rounded-full bg-gradient-to-br from-emerald-400/15 to-transparent blur-3xl" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-80 w-[120%] rounded-full bg-gradient-to-br from-violet-500/45 via-fuchsia-500/35 to-transparent blur-3xl" />
+        <div className="absolute -bottom-32 right-0 h-64 w-64 rounded-full bg-gradient-to-br from-emerald-400/35 to-transparent blur-3xl" />
 
         <div className="relative">
           <WordReveal

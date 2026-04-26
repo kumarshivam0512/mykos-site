@@ -14,22 +14,22 @@ const slides: Slide[] = [
   {
     title: "Brief in plain English.",
     body: "“Promote our new yoga mat to women 25–45 who like wellness brands.” That's the brief. Mykos extracts audience, channel, tone, and offer.",
-    accent: "from-indigo-500/30 via-blue-500/20 to-transparent",
+    accent: "from-violet-500/55 via-indigo-500/40 to-blue-500/25",
   },
   {
     title: "Generate a creative wave.",
     body: "12+ video concepts. Different hooks, different lengths, different aspect ratios. Each tuned to the platform that'll run it.",
-    accent: "from-fuchsia-500/30 via-pink-500/20 to-transparent",
+    accent: "from-fuchsia-500/60 via-pink-500/40 to-rose-500/25",
   },
   {
     title: "Test in parallel. Learn fast.",
     body: "Variants ship simultaneously across Meta, TikTok, Google, LinkedIn. Mykos watches CPA, CTR, ROAS — kills losers, scales winners, automatically.",
-    accent: "from-amber-400/30 via-rose-500/20 to-transparent",
+    accent: "from-orange-400/55 via-amber-400/40 to-rose-500/30",
   },
   {
     title: "You only see what worked.",
     body: "The dashboard surfaces the 3 ads doing the heavy lifting and the next batch already in the oven. Approve. Repeat. Compound.",
-    accent: "from-emerald-400/30 via-cyan-500/20 to-transparent",
+    accent: "from-emerald-400/55 via-teal-400/40 to-cyan-500/30",
   },
 ];
 
@@ -93,9 +93,9 @@ export function StickyShowcase() {
                 className="relative group"
               >
                 <div
-                  className={`relative aspect-[4/3] rounded-3xl border border-white/10 bg-gradient-to-br ${s.accent} overflow-hidden backdrop-blur-sm`}
+                  className={`relative aspect-[4/3] rounded-3xl border border-white/15 bg-gradient-to-br ${s.accent} overflow-hidden backdrop-blur-sm shadow-2xl shadow-black/40`}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.08] to-transparent" />
                   <div className="absolute top-6 left-6 text-xs font-mono text-white/40 uppercase tracking-widest">
                     Step 0{i + 1}
                   </div>

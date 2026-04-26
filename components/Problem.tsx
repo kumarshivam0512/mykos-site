@@ -52,7 +52,7 @@ export function Problem() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: false, margin: "-50px" }}
               transition={{ duration: 0.7, delay: i * 0.12, ease: [0.25, 1, 0.5, 1] }}
-              className="p-7 rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-sm hover:border-white/20 hover:bg-white/[0.04] transition group"
+              className="p-7 rounded-3xl border border-white/15 bg-white/[0.04] backdrop-blur-sm hover:border-white/30 hover:bg-white/[0.07] transition group"
             >
               <div className="font-display italic text-3xl text-white/30 group-hover:text-white/60 transition mb-4">
                 {p.n}
