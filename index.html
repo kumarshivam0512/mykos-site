@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mykos — AI ad creatives that ship themselves</title>
+  <meta name="description" content="Mykos turns a one-line brief into video ads ready to run on Meta, TikTok, Google, and LinkedIn." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Mykos — AI ad creatives that ship themselves" />
+  <meta property="og:description" content="From brief to live ad in minutes. Mykos generates, tests, and runs video ads across every major platform." />
+  <meta property="og:url" content="https://mykos.ai" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['"Instrument Serif"', 'Georgia', 'serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(99,102,241,0.15), transparent 60%),
+        radial-gradient(900px 500px at -10% 30%, rgba(236,72,153,0.10), transparent 60%),
+        #0a0a0b;
+    }
+    .grain::before {
+      content: "";
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.06'/></svg>");
+      pointer-events: none; z-index: 0;
+    }
+    .gradient-text {
+      background: linear-gradient(180deg, #fff 0%, #c9c9d4 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  </style>
+</head>
+<body class="min-h-screen text-white antialiased grain">
+
+  <div class="relative z-10 max-w-5xl mx-auto px-6 py-8 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-400 to-fuchsia-500 grid place-items-center font-bold text-white text-sm">M</div>
+      <span class="text-lg font-semibold tracking-tight">Mykos</span>
+    </a>
+    <nav class="flex items-center gap-5 text-sm text-white/70">
+      <a href="mailto:kumar@mykos.ai" class="hover:text-white transition">Contact</a>
+      <a href="https://app.mykos.ai" class="px-3 py-1.5 rounded-md border border-white/15 hover:bg-white/5 transition">Sign in</a>
+    </nav>
+  </div>
+
+  <main class="relative z-10 max-w-3xl mx-auto px-6 pt-16 pb-32 text-center">
+
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-xs text-white/70 mb-8">
+      <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      Private beta — opening soon
+    </div>
+
+    <h1 class="font-display text-5xl sm:text-6xl md:text-7xl leading-[1.05] tracking-tight gradient-text">
+      AI ad creatives<br />that ship themselves.
+    </h1>
+
+    <p class="mt-7 text-lg sm:text-xl text-white/60 max-w-xl mx-auto leading-relaxed">
+      One-line brief in. A week's worth of video ads — tested, optimised, and live across Meta, TikTok, Google and LinkedIn — out.
+    </p>
+
+    <form
+      action="https://formspree.io/f/REPLACE_WITH_FORM_ID"
+      method="POST"
+      class="mt-10 flex flex-col sm:flex-row gap-2 max-w-md mx-auto"
+    >
+      <input
+        type="email"
+        name="email"
+        required
+        placeholder="you@company.com"
+        class="flex-1 px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-indigo-400/60 focus:bg-white/[0.06] transition"
+      />
+      <input type="hidden" name="_subject" value="Mykos early access request" />
+      <button
+        type="submit"
+        class="px-5 py-3 rounded-lg bg-white text-black font-medium hover:bg-white/90 transition shadow-lg shadow-white/10"
+      >
+        Get early access
+      </button>
+    </form>
+    <p class="mt-3 text-xs text-white/40">No spam. We'll email you when it's your turn.</p>
+
+    <div class="mt-24 grid sm:grid-cols-3 gap-6 text-left">
+      <div class="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
+        <div class="text-2xl mb-2">✦</div>
+        <h3 class="font-medium mb-1">Brief in plain English</h3>
+        <p class="text-sm text-white/55">Describe a campaign the way you'd brief a junior. Mykos handles the rest.</p>
+      </div>
+      <div class="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
+        <div class="text-2xl mb-2">◐</div>
+        <h3 class="font-medium mb-1">Generates &amp; tests</h3>
+        <p class="text-sm text-white/55">Multiple creative directions, A/B'd against your audience automatically.</p>
+      </div>
+      <div class="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
+        <div class="text-2xl mb-2">◢</div>
+        <h3 class="font-medium mb-1">Publishes everywhere</h3>
+        <p class="text-sm text-white/55">Meta, TikTok, Google, LinkedIn — one connect, one click, one source of truth.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="relative z-10 border-t border-white/5">
+    <div class="max-w-5xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/40">
+      <div>© 2026 Mykos. Built in stealth.</div>
+      <div class="flex items-center gap-5">
+        <a href="mailto:kumar@mykos.ai" class="hover:text-white/70">kumar@mykos.ai</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
