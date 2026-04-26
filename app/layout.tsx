@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SmoothScroll } from "@/components/SmoothScroll";
 
 export const metadata: Metadata = {
   title: "Mykos — AI ad creatives that ship themselves",
@@ -40,7 +41,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="relative z-0">{children}</body>
+      <body className="relative z-0">
+        <SmoothScroll />
+        {children}
+      </body>
     </html>
   );
 }
