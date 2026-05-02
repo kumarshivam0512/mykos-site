@@ -124,8 +124,9 @@ async function pollHiggsfield(requestId: string, apiKey: string, apiSecret: stri
     if (!statusRes.ok) continue;
 
     const data = await statusRes.json();
+    const hfStatus = (data.status || "").toUpperCase();
 
-    if (data.status === "COMPLETED") {
+    if (hfStatus === "COMPLETED") {
       const resultRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}`, {
         headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
       });
@@ -138,7 +139,7 @@ async function pollHiggsfield(requestId: string, apiKey: string, apiSecret: stri
       return Buffer.from(await videoRes.arrayBuffer());
     }
 
-    if (data.status === "FAILED") throw new Error("Higgsfield generation failed");
+    if (hfStatus === "FAILED") throw new Error("Higgsfield generation failed");
   }
 
   throw new Error("Video generation timed out (5 min)");

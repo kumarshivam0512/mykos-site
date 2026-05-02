@@ -65,9 +65,10 @@ export async function generateImageHiggsfield(
       if (!statusRes.ok) continue;
 
       const statusData = await statusRes.json();
+      const status = (statusData.status || "").toUpperCase();
       console.log(`[Higgsfield Image] Status: ${statusData.status} (${Math.round(elapsed/1000)}s)`);
 
-      if (statusData.status === "COMPLETED") {
+      if (status === "COMPLETED") {
         const resultRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}`, {
           headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
         });
@@ -82,7 +83,7 @@ export async function generateImageHiggsfield(
         return Buffer.from(await imgRes.arrayBuffer());
       }
 
-      if (statusData.status === "FAILED") {
+      if (status === "FAILED") {
         throw new Error("Higgsfield image generation failed");
       }
     } catch (err) {
