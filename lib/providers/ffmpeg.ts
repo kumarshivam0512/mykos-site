@@ -102,11 +102,15 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
   // Concatenate clips with crossfade transitions
   let currentVideo: string;
   const xfadeDuration = 0.8;
+  // For AI video clips, each is fixed 5s regardless of brief durations
+  const actualDurations = (videoClips && videoClips.length > 0)
+    ? clipPaths.map(() => 5)
+    : durations;
 
   if (clipPaths.length === 1) {
     currentVideo = clipPaths[0];
   } else if (clipPaths.length === 2) {
-    const offset = Math.max(0.5, (durations[0] || 5) - xfadeDuration);
+    const offset = Math.max(0.5, (actualDurations[0] || 5) - xfadeDuration);
     currentVideo = path.join(outputDir, "video_xfade.mp4");
     try {
       await execFileAsync(ffmpeg, [
@@ -128,7 +132,7 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
     let offset = 0;
 
     for (let i = 1; i < clipPaths.length; i++) {
-      offset += Math.max(0.5, (durations[i - 1] || 5) - xfadeDuration);
+      offset += Math.max(0.5, (actualDurations[i - 1] || 5) - xfadeDuration);
       const outLabel = i === clipPaths.length - 1 ? "[v]" : `[xf${i}]`;
       filterChain += `[${prevLabel}][${i}:v]xfade=transition=fade:duration=${xfadeDuration}:offset=${offset}${outLabel};`;
       prevLabel = `xf${i}`;
@@ -144,8 +148,9 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-pix_fmt", "yuv420p", "-y", currentVideo,
       ]);
-    } catch {
-      console.warn("Crossfade failed, using simple concat fallback");
+    } catch (xfadeErr) {
+      console.warn("Crossfade failed:", (xfadeErr as Error).message);
+      console.warn("Filter chain was:", filterChain);
       currentVideo = await concatFallback(ffmpeg, clipPaths, outputDir);
     }
   }
