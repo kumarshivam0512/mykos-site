@@ -20,7 +20,7 @@ export const VIDEO_MODELS: { id: VideoModel; label: string; provider: string; ti
 const HIGGSFIELD_ENDPOINTS: Record<string, string> = {
   "kling-2.1-standard": "kling-video/v2.1/standard/image-to-video",
   "kling-2.1-pro": "kling-video/v2.1/pro/image-to-video",
-  "seedance-pro": "bytedance/seedance/v1/pro/image-to-video",
+  "seedance-pro": "seedance/v1/pro/image-to-video",
 };
 
 export async function generateVideoClip(
