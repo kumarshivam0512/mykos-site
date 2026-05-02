@@ -92,7 +92,7 @@ async function generateViaHiggsfield(
     body: JSON.stringify({
       prompt,
       image_url: imageUrl,
-      duration: String(Math.min(duration, 10)),
+      duration: Math.min(duration, 10),
       aspect_ratio: aspectRatio,
     }),
   });

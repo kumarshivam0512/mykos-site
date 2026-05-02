@@ -69,26 +69,49 @@ export async function generateImageHiggsfield(
       console.log(`[Higgsfield Image] Status: ${statusData.status} (${Math.round(elapsed/1000)}s)`);
 
       if (status === "COMPLETED") {
+        // Image URL may be in the status response itself
+        console.log("[Higgsfield Image] Status response:", JSON.stringify(statusData).substring(0, 500));
+
+        // Try extracting image URL from status response first
+        const imageUrl = statusData.images?.[0]?.url
+          || statusData.image?.url
+          || statusData.output?.url
+          || statusData.response_url
+          || (typeof statusData.output === "string" ? statusData.output : null);
+
+        if (imageUrl) {
+          console.log("[Higgsfield Image] Downloading from status response:", imageUrl.substring(0, 100));
+          const imgRes = await fetch(imageUrl);
+          if (!imgRes.ok) throw new Error(`Failed to download image (${imgRes.status})`);
+          return Buffer.from(await imgRes.arrayBuffer());
+        }
+
+        // Fallback: try fetching result from /requests/{id} endpoint
         const resultRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}`, {
           headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
         });
-        if (!resultRes.ok) throw new Error("Failed to fetch Higgsfield result");
+        if (resultRes.ok) {
+          const resultData = await resultRes.json();
+          console.log("[Higgsfield Image] Result data:", JSON.stringify(resultData).substring(0, 500));
+          const url = resultData.images?.[0]?.url || resultData.image?.url || resultData.output?.url;
+          if (url) {
+            const imgRes = await fetch(url);
+            if (!imgRes.ok) throw new Error("Failed to download image");
+            return Buffer.from(await imgRes.arrayBuffer());
+          }
+        }
 
-        const resultData = await resultRes.json();
-        const imageUrl = resultData.images?.[0]?.url;
-        if (!imageUrl) throw new Error("No image URL in Higgsfield result");
-
-        const imgRes = await fetch(imageUrl);
-        if (!imgRes.ok) throw new Error("Failed to download image");
-        return Buffer.from(await imgRes.arrayBuffer());
+        throw new Error("No image URL found in Higgsfield response");
       }
 
       if (status === "FAILED") {
         throw new Error("Higgsfield image generation failed");
       }
     } catch (err) {
-      if ((err as Error).message.includes("failed")) throw err;
-      // Network error during poll — retry
+      const msg = (err as Error).message || "";
+      // Re-throw actual failures, only retry on network errors
+      if (msg.toLowerCase().includes("failed") || msg.includes("No image")) throw err;
+      console.warn("[Higgsfield Image] Poll error (retrying):", msg);
     }
   }
 
