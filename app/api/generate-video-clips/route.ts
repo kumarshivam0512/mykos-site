@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateVideoClip, type VideoModel } from "@/lib/providers/fal-video";
-import type { Scene } from "@/lib/types";
+import type { Scene, CameraSettings, AdFormat } from "@/lib/types";
 import path from "path";
 import fs from "fs/promises";
 
@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
       aspectRatio = "16:9",
       hasProductImage = false,
       duration = 5,
+      cameraSettings,
+      adFormat,
     } = body as {
       images: string[];
       scenes: Scene[];
@@ -25,6 +27,8 @@ export async function POST(req: NextRequest) {
       aspectRatio?: string;
       hasProductImage?: boolean;
       duration?: number;
+      cameraSettings?: CameraSettings;
+      adFormat?: AdFormat;
     };
 
     if (!images?.length || !scenes?.length) {
@@ -63,7 +67,9 @@ export async function POST(req: NextRequest) {
         clipDuration,
         model,
         aspectRatio,
-        hasProductImage
+        hasProductImage,
+        cameraSettings,
+        adFormat
       );
 
       const clipPath = path.join(OUTPUT_DIR, `ai_clip_${i}.mp4`);

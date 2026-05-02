@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateImageWithFallback } from "@/lib/providers/fallback";
-import type { Scene, BrandKit } from "@/lib/types";
+import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
@@ -10,11 +10,14 @@ const OUTPUT_DIR = path.join(process.cwd(), "public", "output");
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { scenes, brandKit, aspectRatio = "16:9", textOverlays } = body as {
+    const { scenes, brandKit, aspectRatio = "16:9", textOverlays, cameraSettings, adFormat, hasProductImage } = body as {
       scenes: Scene[];
       brandKit: BrandKit;
       aspectRatio?: string;
       textOverlays?: { sceneIndex: number; text: string; position: "top" | "bottom" | "center" }[];
+      cameraSettings?: CameraSettings;
+      adFormat?: AdFormat;
+      hasProductImage?: boolean;
     };
 
     if (!scenes?.length) {
@@ -37,7 +40,10 @@ export async function POST(req: NextRequest) {
         brandKit,
         dimensions.width,
         dimensions.height,
-        Date.now() + i
+        Date.now() + i,
+        cameraSettings,
+        adFormat,
+        hasProductImage
       );
 
       // Process with Sharp: resize + logo composite

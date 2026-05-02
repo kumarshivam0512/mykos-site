@@ -1,4 +1,5 @@
-import type { Scene } from "@/lib/types";
+import type { Scene, CameraSettings, AdFormat } from "@/lib/types";
+import { buildVideoPrompt } from "@/lib/prompts/prompt-engine";
 
 // ─── Video Model Tiers (user-selectable) ─────────────────────────
 export type VideoModel =
@@ -22,83 +23,18 @@ const HIGGSFIELD_ENDPOINTS: Record<string, string> = {
   "seedance-pro": "bytedance/seedance/v1/pro/image-to-video",
 };
 
-// ─── Advanced Motion Prompt Builder ──────────────────────────────
-// Key principles from Higgsfield/Kling best practices:
-// 1. Describe WHAT moves and HOW (not just camera keywords)
-// 2. Use full sentences, not comma lists
-// 3. Anchor the product — tell the model to preserve it
-// 4. Specify motion intensity (subtle vs dramatic)
-
-function buildAdvancedPrompt(scene: Scene, hasProductImage: boolean): string {
-  const lines: string[] = [];
-
-  // Core visual description
-  lines.push(scene.visualPrompt);
-
-  // Camera motion — map common terms to explicit descriptions
-  const motionLower = (scene.motion || "").toLowerCase();
-  if (motionLower === "static" || !motionLower) {
-    lines.push("Camera holds steady. Subtle ambient motion only — hair sways gently, fabric shifts, light plays across surfaces");
-  } else if (motionLower.includes("dolly") && motionLower.includes("forward")) {
-    lines.push("Camera slowly dollies forward toward the subject, creating a gentle push-in effect");
-  } else if (motionLower.includes("dolly") || motionLower.includes("push")) {
-    lines.push("Camera slowly pushes in toward the hero subject with smooth forward motion");
-  } else if (motionLower.includes("pull") || motionLower.includes("reveal")) {
-    lines.push("Camera pulls back smoothly to reveal the full scene and context");
-  } else if (motionLower.includes("orbit") || motionLower.includes("arc")) {
-    lines.push("Camera smoothly orbits around the subject in a 45-degree arc, showcasing it from multiple angles");
-  } else if (motionLower.includes("pan")) {
-    lines.push("Camera pans slowly from left to right, revealing the scene in a cinematic sweep");
-  } else if (motionLower.includes("tilt") || motionLower.includes("crane")) {
-    lines.push("Camera tilts or cranes upward, transitioning from detail to the wider environment");
-  } else if (motionLower.includes("handheld") || motionLower.includes("tracking")) {
-    lines.push("Handheld camera gently tracks the subject with natural, organic micro-movements");
-  } else if (motionLower.includes("zoom")) {
-    lines.push("Smooth slow zoom into the subject, drawing the viewer's attention to key details");
-  } else {
-    lines.push(`Camera movement: ${scene.motion}. Smooth and cinematic`);
-  }
-
-  // Camera angle context
-  if (scene.cameraAngle) {
-    lines.push(`Shot framing: ${scene.cameraAngle}`);
-  }
-
-  // Lighting
-  lines.push(`Lighting: ${scene.lighting}`);
-
-  // Product preservation — critical for product ads
-  if (hasProductImage) {
-    lines.push(
-      "CRITICAL: The product visible in this image must remain exactly as shown — " +
-      "same shape, colors, logo, packaging, and proportions. " +
-      "Do not morph, distort, redesign, or obscure the product at any point. " +
-      "The product is the hero of this shot and must be clearly recognizable throughout."
-    );
-  }
-
-  // Quality anchors
-  lines.push(
-    "Professional commercial advertisement quality. " +
-    "Smooth natural motion with no sudden jumps, warping, or artifacts. " +
-    "Photorealistic rendering, cinematic depth of field."
-  );
-
-  return lines.join(". ");
-}
-
-// ─── Main Entry Point ────────────────────────────────────────────
-
 export async function generateVideoClip(
   imageUrl: string,
   scene: Scene,
   duration: number = 5,
   model: VideoModel = "auto",
   aspectRatio: string = "16:9",
-  hasProductImage: boolean = false
+  hasProductImage: boolean = false,
+  cameraSettings?: CameraSettings,
+  adFormat?: AdFormat
 ): Promise<Buffer> {
   const resolvedModel = resolveModel(model);
-  const prompt = buildAdvancedPrompt(scene, hasProductImage);
+  const prompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage);
 
   console.log(`[Video] Model: ${resolvedModel}, Duration: ${duration}s, Prompt length: ${prompt.length}`);
 

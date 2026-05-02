@@ -1,15 +1,19 @@
-import type { Scene, BrandKit } from "@/lib/types";
+import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
+import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
 
 export async function generateImageReplicate(
   scene: Scene,
   brandKit: BrandKit,
   width = 1024,
-  height = 576
+  height = 576,
+  cameraSettings?: CameraSettings,
+  adFormat?: AdFormat,
+  hasProductImage?: boolean
 ): Promise<Buffer> {
   const apiToken = process.env.REPLICATE_API_TOKEN;
   if (!apiToken) throw new Error("REPLICATE_API_TOKEN not configured");
 
-  const prompt = buildPrompt(scene, brandKit);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage);
 
   // Submit prediction
   const submitRes = await fetch("https://api.replicate.com/v1/predictions", {
@@ -73,23 +77,6 @@ export async function generateImageReplicate(
   }
 
   throw new Error("Replicate image generation timed out");
-}
-
-function buildPrompt(scene: Scene, brandKit: BrandKit): string {
-  const parts = [
-    "photorealistic commercial advertising photography",
-    scene.visualPrompt,
-    `${scene.cameraAngle} camera angle`,
-    `${scene.lighting} lighting`,
-    scene.motion !== "static" ? `sense of ${scene.motion}` : "",
-  ];
-
-  if (brandKit.colors.length > 0) {
-    parts.push(`color palette incorporating: ${brandKit.colors.join(", ")}`);
-  }
-
-  parts.push("8K resolution, sharp detail, professional advertising, no text overlay");
-  return parts.filter(Boolean).join(", ");
 }
 
 function getAspectString(width: number, height: number): string {

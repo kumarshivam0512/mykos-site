@@ -1,4 +1,4 @@
-import type { Scene, BrandKit } from "@/lib/types";
+import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
 import { generateImage } from "./pollinations";
 import { generateImageReplicate } from "./replicate-image";
 import { generateImageGemini } from "./gemini-image";
@@ -9,13 +9,16 @@ export async function generateImageWithFallback(
   brandKit: BrandKit,
   width = 1024,
   height = 576,
-  seed?: number
+  seed?: number,
+  cameraSettings?: CameraSettings,
+  adFormat?: AdFormat,
+  hasProductImage?: boolean
 ): Promise<Buffer> {
   const errors: string[] = [];
 
   // 1. Pollinations (free, no key needed)
   try {
-    return await generateImage(scene, brandKit, width, height, seed);
+    return await generateImage(scene, brandKit, width, height, seed, cameraSettings, adFormat, hasProductImage);
   } catch (err) {
     const msg = (err as Error).message;
     errors.push(`Pollinations: ${msg}`);
@@ -25,7 +28,7 @@ export async function generateImageWithFallback(
   // 2. Replicate FLUX Schnell (fast, $0.003/image)
   if (process.env.REPLICATE_API_TOKEN) {
     try {
-      return await generateImageReplicate(scene, brandKit, width, height);
+      return await generateImageReplicate(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Replicate: ${msg}`);
@@ -36,7 +39,7 @@ export async function generateImageWithFallback(
   // 3. Gemini image (requires billing, ~$0.04/image)
   if (process.env.GEMINI_API_KEY) {
     try {
-      return await generateImageGemini(scene, brandKit, width, height);
+      return await generateImageGemini(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Gemini: ${msg}`);
@@ -47,7 +50,7 @@ export async function generateImageWithFallback(
   // 4. Fal.ai (requires FAL_KEY)
   if (process.env.FAL_KEY) {
     try {
-      return await generateImageFal(scene, brandKit, width, height);
+      return await generateImageFal(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Fal.ai: ${msg}`);

@@ -1,15 +1,19 @@
-import type { Scene, BrandKit } from "@/lib/types";
+import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
+import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
 
 export async function generateImageFal(
   scene: Scene,
   brandKit: BrandKit,
   width = 1024,
-  height = 576
+  height = 576,
+  cameraSettings?: CameraSettings,
+  adFormat?: AdFormat,
+  hasProductImage?: boolean
 ): Promise<Buffer> {
   const apiKey = process.env.FAL_KEY;
   if (!apiKey) throw new Error("FAL_KEY not configured");
 
-  const prompt = buildFalPrompt(scene, brandKit);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage);
 
   const res = await fetch("https://queue.fal.run/fal-ai/flux/schnell", {
     method: "POST",
@@ -33,20 +37,4 @@ export async function generateImageFal(
   const imageRes = await fetch(imageUrl);
   const arrayBuffer = await imageRes.arrayBuffer();
   return Buffer.from(arrayBuffer);
-}
-
-function buildFalPrompt(scene: Scene, brandKit: BrandKit): string {
-  const parts = [
-    "photorealistic commercial photography",
-    scene.visualPrompt,
-    `${scene.cameraAngle} camera angle`,
-    `${scene.lighting} lighting`,
-  ];
-
-  if (brandKit.colors.length > 0) {
-    parts.push(`color palette: ${brandKit.colors.join(", ")}`);
-  }
-
-  parts.push("8K, sharp detail, professional advertising");
-  return parts.filter(Boolean).join(", ");
 }

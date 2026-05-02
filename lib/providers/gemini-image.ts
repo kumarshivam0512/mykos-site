@@ -1,11 +1,15 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { Scene, BrandKit } from "@/lib/types";
+import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
+import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
 
 export async function generateImageGemini(
   scene: Scene,
   brandKit: BrandKit,
   width = 1024,
-  height = 576
+  height = 576,
+  cameraSettings?: CameraSettings,
+  adFormat?: AdFormat,
+  hasProductImage?: boolean
 ): Promise<Buffer> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
@@ -13,7 +17,7 @@ export async function generateImageGemini(
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
 
-  const prompt = buildGeminiImagePrompt(scene, brandKit, width, height);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage);
 
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -34,27 +38,4 @@ export async function generateImageGemini(
   }
 
   throw new Error("No image data in Gemini response");
-}
-
-function buildGeminiImagePrompt(
-  scene: Scene,
-  brandKit: BrandKit,
-  width: number,
-  height: number
-): string {
-  const parts = [
-    `Generate a photorealistic commercial advertising photograph.`,
-    `Scene: ${scene.visualPrompt}`,
-    `Camera angle: ${scene.cameraAngle}`,
-    `Lighting: ${scene.lighting}`,
-    `Style: professional advertising photography, 8K quality, sharp detail`,
-  ];
-
-  if (brandKit.colors.length > 0) {
-    parts.push(`Incorporate brand colors: ${brandKit.colors.join(", ")}`);
-  }
-
-  parts.push(`Aspect ratio: ${width}:${height}. No text overlays.`);
-
-  return parts.join("\n");
 }

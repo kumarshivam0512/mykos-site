@@ -96,6 +96,9 @@ export default function GeneratePage() {
             scenes: brief.scenes,
             brandKit,
             aspectRatio: selectedAspectRatio,
+            cameraSettings: brief.cameraSettings,
+            adFormat: brief.adFormat,
+            hasProductImage: !!brandKit.logoUrl,
           }),
         });
         if (!imgRes.ok) throw new Error("Image generation failed");
@@ -121,6 +124,8 @@ export default function GeneratePage() {
             model: selectedModel,
             aspectRatio: selectedAspectRatio,
             hasProductImage: !!brandKit.logoUrl,
+            cameraSettings: brief.cameraSettings,
+            adFormat: brief.adFormat,
           }),
         });
         if (!clipRes.ok) {
@@ -209,6 +214,8 @@ export default function GeneratePage() {
           model: selectedModel,
           aspectRatio: selectedAspectRatio,
           hasProductImage: !!brandKit.logoUrl,
+          cameraSettings: brief.cameraSettings,
+          adFormat: brief.adFormat,
         }),
       });
       if (!res.ok) {
@@ -237,6 +244,9 @@ export default function GeneratePage() {
           scenes: brief.scenes,
           brandKit,
           aspectRatio: selectedAspectRatio,
+          cameraSettings: brief.cameraSettings,
+          adFormat: brief.adFormat,
+          hasProductImage: !!brandKit.logoUrl,
         }),
       });
       if (!res.ok) throw new Error("Failed");
