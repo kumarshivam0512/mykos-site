@@ -21,7 +21,8 @@ export async function generateImageWithFallback(
   // 1. Higgsfield Soul 2.0 (best quality, uses same API key as video)
   if (process.env.HIGGSFIELD_KEY && process.env.HIGGSFIELD_SECRET) {
     try {
-      return await generateImageHiggsfield(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
+      const result = await generateImageHiggsfield(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
+      return result.buffer;
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Higgsfield: ${msg}`);

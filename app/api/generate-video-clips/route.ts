@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       cameraSettings,
       adFormat,
       characterDescription,
+      sourceUrls,
     } = body as {
       images: string[];
       scenes: Scene[];
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
       cameraSettings?: CameraSettings;
       adFormat?: AdFormat;
       characterDescription?: string;
+      sourceUrls?: string[];
     };
 
     if (!images?.length || !scenes?.length) {
@@ -56,15 +58,22 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < count; i++) {
       console.log(`[VideoClips] Generating scene ${i + 1}/${count} with model=${model}`);
 
-      // Read image and convert to base64 data URL
-      const imagePath = path.join(process.cwd(), "public", images[i]);
-      const imageBuffer = await fs.readFile(imagePath);
-      const base64 = imageBuffer.toString("base64");
-      const ext = images[i].endsWith(".png") ? "png" : "jpeg";
-      const dataUrl = `data:image/${ext};base64,${base64}`;
+      // Use public source URL if available (from Higgsfield), otherwise base64
+      let imageUrl: string;
+      if (sourceUrls?.[i]) {
+        imageUrl = sourceUrls[i];
+        console.log(`[VideoClips] Using source URL: ${imageUrl.substring(0, 80)}...`);
+      } else {
+        const imagePath = path.join(process.cwd(), "public", images[i]);
+        const imageBuffer = await fs.readFile(imagePath);
+        const base64 = imageBuffer.toString("base64");
+        const ext = images[i].endsWith(".png") ? "png" : "jpeg";
+        imageUrl = `data:image/${ext};base64,${base64}`;
+        console.log(`[VideoClips] Using base64 data URL (${Math.round(imageUrl.length/1024)}KB)`);
+      }
 
       const videoBuffer = await generateVideoClip(
-        dataUrl,
+        imageUrl,
         scenes[i],
         clipDuration,
         model,

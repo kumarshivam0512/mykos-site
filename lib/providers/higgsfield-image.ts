@@ -1,6 +1,11 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
 import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
 
+export interface HiggsfieldImageResult {
+  buffer: Buffer;
+  sourceUrl: string;
+}
+
 export async function generateImageHiggsfield(
   scene: Scene,
   brandKit: BrandKit,
@@ -10,7 +15,7 @@ export async function generateImageHiggsfield(
   adFormat?: AdFormat,
   hasProductImage?: boolean,
   characterDescription?: string
-): Promise<Buffer> {
+): Promise<HiggsfieldImageResult> {
   const apiKey = process.env.HIGGSFIELD_KEY;
   const apiSecret = process.env.HIGGSFIELD_SECRET;
   if (!apiKey || !apiSecret) throw new Error("HIGGSFIELD_KEY and HIGGSFIELD_SECRET required");
@@ -40,9 +45,10 @@ export async function generateImageHiggsfield(
 
   // Check if images returned directly (some models return immediately)
   if (submitData.images?.[0]?.url) {
-    const imgRes = await fetch(submitData.images[0].url);
+    const url = submitData.images[0].url;
+    const imgRes = await fetch(url);
     if (!imgRes.ok) throw new Error("Failed to download image from Higgsfield");
-    return Buffer.from(await imgRes.arrayBuffer());
+    return { buffer: Buffer.from(await imgRes.arrayBuffer()), sourceUrl: url };
   }
 
   // Otherwise poll for completion
@@ -83,7 +89,7 @@ export async function generateImageHiggsfield(
           console.log("[Higgsfield Image] Downloading from status response:", imageUrl.substring(0, 100));
           const imgRes = await fetch(imageUrl);
           if (!imgRes.ok) throw new Error(`Failed to download image (${imgRes.status})`);
-          return Buffer.from(await imgRes.arrayBuffer());
+          return { buffer: Buffer.from(await imgRes.arrayBuffer()), sourceUrl: imageUrl };
         }
 
         // Fallback: try fetching result from /requests/{id} endpoint
@@ -97,7 +103,7 @@ export async function generateImageHiggsfield(
           if (url) {
             const imgRes = await fetch(url);
             if (!imgRes.ok) throw new Error("Failed to download image");
-            return Buffer.from(await imgRes.arrayBuffer());
+            return { buffer: Buffer.from(await imgRes.arrayBuffer()), sourceUrl: url };
           }
         }
 

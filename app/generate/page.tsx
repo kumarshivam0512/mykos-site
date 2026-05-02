@@ -82,6 +82,7 @@ export default function GeneratePage() {
     if (!skipImages) setCompletedSteps(new Set());
 
     let currentImages = assets.images;
+    let currentSourceUrls: string[] = [];
     let currentVoiceoverUrl = assets.voiceoverUrl;
     let currentClips = assets.videoClips;
 
@@ -106,6 +107,7 @@ export default function GeneratePage() {
         if (!imgRes.ok) throw new Error("Image generation failed");
         const imgData = await imgRes.json();
         currentImages = imgData.images;
+        currentSourceUrls = imgData.sourceUrls || [];
         setAssets({
           images: imgData.images,
           variants: videoMode === "slideshow" ? (imgData.variants || []) : [],
@@ -129,6 +131,7 @@ export default function GeneratePage() {
             cameraSettings: brief.cameraSettings,
             adFormat: brief.adFormat,
             characterDescription: brief.characterDescription,
+            sourceUrls: currentSourceUrls,
           }),
         });
         if (!clipRes.ok) {

@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     const dimensions = getAspectDimensions(aspectRatio);
     const imagePaths: string[] = [];
     const variants: string[] = [];
+    const sourceUrls: string[] = []; // Original URLs from providers (for video i2v)
 
     for (let i = 0; i < scenes.length; i++) {
       // Delay between requests to avoid rate limiting
@@ -42,17 +43,21 @@ export async function POST(req: NextRequest) {
       // HD mode: use Higgsfield directly (no fallback)
       // Standard mode: use fallback chain
       let buffer: Buffer;
+      let sourceUrl: string | undefined;
       if (useHiggsfield && process.env.HIGGSFIELD_KEY && process.env.HIGGSFIELD_SECRET) {
-        buffer = await generateImageHiggsfield(
+        const result = await generateImageHiggsfield(
           scene, brandKit, dimensions.width, dimensions.height,
           cameraSettings, adFormat, hasProductImage, characterDescription
         );
+        buffer = result.buffer;
+        sourceUrl = result.sourceUrl;
       } else {
         buffer = await generateImageWithFallback(
           scene, brandKit, dimensions.width, dimensions.height,
           Date.now() + i, cameraSettings, adFormat, hasProductImage, characterDescription
         );
       }
+      if (sourceUrl) sourceUrls.push(sourceUrl);
 
       // Process with Sharp: resize + logo composite
       let pipeline = sharp(buffer).resize(
@@ -131,7 +136,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ images: imagePaths, variants });
+    return NextResponse.json({ images: imagePaths, variants, sourceUrls });
   } catch (error) {
     console.error("Image generation error:", error);
     return NextResponse.json(
