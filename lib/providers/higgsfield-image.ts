@@ -49,41 +49,49 @@ export async function generateImageHiggsfield(
   const requestId = submitData.request_id;
   if (!requestId) throw new Error("No request_id from Higgsfield Soul");
 
-  const maxWait = 120000; // 2 min max for images
+  const maxWait = 300000; // 5 min max
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWait) {
-    const interval = Date.now() - startTime < 30000 ? 5000 : 3000;
+    // Poll every 3s for first 30s, then every 5s
+    const elapsed = Date.now() - startTime;
+    const interval = elapsed < 30000 ? 3000 : 5000;
     await new Promise((r) => setTimeout(r, interval));
 
-    const statusRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}/status`, {
-      headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
-    });
-    if (!statusRes.ok) continue;
-
-    const statusData = await statusRes.json();
-
-    if (statusData.status === "COMPLETED") {
-      const resultRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}`, {
+    try {
+      const statusRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}/status`, {
         headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
       });
-      if (!resultRes.ok) throw new Error("Failed to fetch Higgsfield result");
+      if (!statusRes.ok) continue;
 
-      const resultData = await resultRes.json();
-      const imageUrl = resultData.images?.[0]?.url;
-      if (!imageUrl) throw new Error("No image URL in Higgsfield result");
+      const statusData = await statusRes.json();
+      console.log(`[Higgsfield Image] Status: ${statusData.status} (${Math.round(elapsed/1000)}s)`);
 
-      const imgRes = await fetch(imageUrl);
-      if (!imgRes.ok) throw new Error("Failed to download image");
-      return Buffer.from(await imgRes.arrayBuffer());
-    }
+      if (statusData.status === "COMPLETED") {
+        const resultRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}`, {
+          headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
+        });
+        if (!resultRes.ok) throw new Error("Failed to fetch Higgsfield result");
 
-    if (statusData.status === "FAILED") {
-      throw new Error("Higgsfield image generation failed");
+        const resultData = await resultRes.json();
+        const imageUrl = resultData.images?.[0]?.url;
+        if (!imageUrl) throw new Error("No image URL in Higgsfield result");
+
+        const imgRes = await fetch(imageUrl);
+        if (!imgRes.ok) throw new Error("Failed to download image");
+        return Buffer.from(await imgRes.arrayBuffer());
+      }
+
+      if (statusData.status === "FAILED") {
+        throw new Error("Higgsfield image generation failed");
+      }
+    } catch (err) {
+      if ((err as Error).message.includes("failed")) throw err;
+      // Network error during poll — retry
     }
   }
 
-  throw new Error("Higgsfield image generation timed out (2 min)");
+  throw new Error("Higgsfield image generation timed out (5 min)");
 }
 
 function getAspectRatio(width: number, height: number): string {

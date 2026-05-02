@@ -88,7 +88,7 @@ export default function GeneratePage() {
     try {
       // Step 1: Generate Images
       if (!skipImages) {
-        setPipelineStep("generating_images", "Creating visuals for each scene...");
+        setPipelineStep("generating_images", videoMode === "ai_video" ? "Creating HD visuals via Higgsfield..." : "Creating visuals for each scene...");
         const imgRes = await fetch("/api/generate-images", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -100,6 +100,7 @@ export default function GeneratePage() {
             adFormat: brief.adFormat,
             hasProductImage: !!brandKit.logoUrl,
             characterDescription: brief.characterDescription,
+            useHiggsfield: videoMode === "ai_video",
           }),
         });
         if (!imgRes.ok) throw new Error("Image generation failed");
@@ -251,6 +252,7 @@ export default function GeneratePage() {
           adFormat: brief.adFormat,
           hasProductImage: !!brandKit.logoUrl,
           characterDescription: brief.characterDescription,
+          useHiggsfield: videoMode === "ai_video",
         }),
       });
       if (!res.ok) throw new Error("Failed");

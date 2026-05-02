@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateImageWithFallback } from "@/lib/providers/fallback";
+import { generateImageHiggsfield } from "@/lib/providers/higgsfield-image";
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
 import sharp from "sharp";
 import path from "path";
@@ -10,7 +11,7 @@ const OUTPUT_DIR = path.join(process.cwd(), "public", "output");
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { scenes, brandKit, aspectRatio = "16:9", textOverlays, cameraSettings, adFormat, hasProductImage, characterDescription } = body as {
+    const { scenes, brandKit, aspectRatio = "16:9", textOverlays, cameraSettings, adFormat, hasProductImage, characterDescription, useHiggsfield = false } = body as {
       scenes: Scene[];
       brandKit: BrandKit;
       aspectRatio?: string;
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
       adFormat?: AdFormat;
       hasProductImage?: boolean;
       characterDescription?: string;
+      useHiggsfield?: boolean;
     };
 
     if (!scenes?.length) {
@@ -36,17 +38,21 @@ export async function POST(req: NextRequest) {
       if (i > 0) await new Promise((r) => setTimeout(r, 2000));
 
       const scene = scenes[i];
-      const buffer = await generateImageWithFallback(
-        scene,
-        brandKit,
-        dimensions.width,
-        dimensions.height,
-        Date.now() + i,
-        cameraSettings,
-        adFormat,
-        hasProductImage,
-        characterDescription
-      );
+
+      // HD mode: use Higgsfield directly (no fallback)
+      // Standard mode: use fallback chain
+      let buffer: Buffer;
+      if (useHiggsfield && process.env.HIGGSFIELD_KEY && process.env.HIGGSFIELD_SECRET) {
+        buffer = await generateImageHiggsfield(
+          scene, brandKit, dimensions.width, dimensions.height,
+          cameraSettings, adFormat, hasProductImage, characterDescription
+        );
+      } else {
+        buffer = await generateImageWithFallback(
+          scene, brandKit, dimensions.width, dimensions.height,
+          Date.now() + i, cameraSettings, adFormat, hasProductImage, characterDescription
+        );
+      }
 
       // Process with Sharp: resize + logo composite
       let pipeline = sharp(buffer).resize(
