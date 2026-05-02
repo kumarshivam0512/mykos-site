@@ -126,7 +126,8 @@ export interface PipelineStatus {
 export interface GeneratedAssets {
   images: string[];
   variants: string[];
-  videoClips?: string[];  // AI-generated video clips (per scene)
+  sourceUrls?: string[]; // Original provider URLs (for i2v, avoids re-upload)
+  videoClips?: string[];
   voiceoverUrl?: string;
   musicTrack?: string;
   videoUrl?: string;

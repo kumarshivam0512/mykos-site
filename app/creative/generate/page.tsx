@@ -82,7 +82,7 @@ export default function GeneratePage() {
     if (!skipImages) setCompletedSteps(new Set());
 
     let currentImages = assets.images;
-    let currentSourceUrls: string[] = [];
+    let currentSourceUrls: string[] = assets.sourceUrls || [];
     let currentVoiceoverUrl = assets.voiceoverUrl;
     let currentClips = assets.videoClips;
 
@@ -111,6 +111,7 @@ export default function GeneratePage() {
         setAssets({
           images: imgData.images,
           variants: videoMode === "slideshow" ? (imgData.variants || []) : [],
+          sourceUrls: currentSourceUrls,
         });
       }
       setCompletedSteps((prev) => new Set(prev).add("generating_images"));
