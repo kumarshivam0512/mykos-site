@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAdStore } from "@/store/use-ad-store";
 import type { PipelineStep, VideoMode } from "@/lib/types";
+import { VIDEO_MODELS, type VideoModel } from "@/lib/providers/fal-video";
 import {
   ArrowLeft,
   Check,
@@ -55,6 +56,7 @@ export default function GeneratePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasVideoKey, setHasVideoKey] = useState(false);
   const [testClipUrl, setTestClipUrl] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<VideoModel>("auto");
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Check config on mount
@@ -116,6 +118,9 @@ export default function GeneratePage() {
             images: currentImages,
             scenes: brief.scenes,
             testMode: false,
+            model: selectedModel,
+            aspectRatio: selectedAspectRatio,
+            hasProductImage: !!brandKit.logoUrl,
           }),
         });
         if (!clipRes.ok) {
@@ -201,6 +206,9 @@ export default function GeneratePage() {
           images: assets.images,
           scenes: brief.scenes,
           testMode: true,
+          model: selectedModel,
+          aspectRatio: selectedAspectRatio,
+          hasProductImage: !!brandKit.logoUrl,
         }),
       });
       if (!res.ok) {
@@ -307,6 +315,24 @@ export default function GeneratePage() {
                 )}
               </button>
             </div>
+
+            {/* Model Selector (visible in HD Video mode) */}
+            {videoMode === "ai_video" && hasVideoKey && (
+              <>
+                <div className="w-px h-6 bg-border" />
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value as VideoModel)}
+                  className="bg-secondary border border-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {VIDEO_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} ({m.tier})
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             <div className="w-px h-6 bg-border" />
 
