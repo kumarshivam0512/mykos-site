@@ -1,4 +1,5 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
+import { generateImageHiggsfield } from "./higgsfield-image";
 import { generateImage } from "./pollinations";
 import { generateImageReplicate } from "./replicate-image";
 import { generateImageGemini } from "./gemini-image";
@@ -17,7 +18,18 @@ export async function generateImageWithFallback(
 ): Promise<Buffer> {
   const errors: string[] = [];
 
-  // 1. Pollinations (free, no key needed)
+  // 1. Higgsfield Soul 2.0 (best quality, uses same API key as video)
+  if (process.env.HIGGSFIELD_KEY && process.env.HIGGSFIELD_SECRET) {
+    try {
+      return await generateImageHiggsfield(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
+    } catch (err) {
+      const msg = (err as Error).message;
+      errors.push(`Higgsfield: ${msg}`);
+      console.warn("Higgsfield image failed:", msg);
+    }
+  }
+
+  // 2. Pollinations (free, no key needed)
   try {
     return await generateImage(scene, brandKit, width, height, seed, cameraSettings, adFormat, hasProductImage, characterDescription);
   } catch (err) {
