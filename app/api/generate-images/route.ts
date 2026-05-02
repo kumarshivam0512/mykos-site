@@ -10,7 +10,7 @@ const OUTPUT_DIR = path.join(process.cwd(), "public", "output");
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { scenes, brandKit, aspectRatio = "16:9", textOverlays, cameraSettings, adFormat, hasProductImage } = body as {
+    const { scenes, brandKit, aspectRatio = "16:9", textOverlays, cameraSettings, adFormat, hasProductImage, characterDescription } = body as {
       scenes: Scene[];
       brandKit: BrandKit;
       aspectRatio?: string;
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       cameraSettings?: CameraSettings;
       adFormat?: AdFormat;
       hasProductImage?: boolean;
+      characterDescription?: string;
     };
 
     if (!scenes?.length) {
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest) {
         Date.now() + i,
         cameraSettings,
         adFormat,
-        hasProductImage
+        hasProductImage,
+        characterDescription
       );
 
       // Process with Sharp: resize + logo composite

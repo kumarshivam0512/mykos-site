@@ -90,6 +90,7 @@ export interface CreativeBrief {
   platformBriefs: PlatformBrief[];
   competitorAnalysis?: CompetitorAnalysis;
   adFormat: AdFormat;
+  characterDescription?: string; // consistent character across all scenes
   duration: number;
   scenes: Scene[];
   voiceoverScript: string;

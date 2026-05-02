@@ -31,10 +31,11 @@ export async function generateVideoClip(
   aspectRatio: string = "16:9",
   hasProductImage: boolean = false,
   cameraSettings?: CameraSettings,
-  adFormat?: AdFormat
+  adFormat?: AdFormat,
+  characterDescription?: string
 ): Promise<Buffer> {
   const resolvedModel = resolveModel(model);
-  const prompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage);
+  const prompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, characterDescription);
 
   console.log(`[Video] Model: ${resolvedModel}, Duration: ${duration}s, Prompt length: ${prompt.length}`);
 

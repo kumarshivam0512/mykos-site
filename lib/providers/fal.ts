@@ -8,12 +8,13 @@ export async function generateImageFal(
   height = 576,
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
-  hasProductImage?: boolean
+  hasProductImage?: boolean,
+  characterDescription?: string
 ): Promise<Buffer> {
   const apiKey = process.env.FAL_KEY;
   if (!apiKey) throw new Error("FAL_KEY not configured");
 
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, characterDescription);
 
   const res = await fetch("https://queue.fal.run/fal-ai/flux/schnell", {
     method: "POST",

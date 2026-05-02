@@ -10,8 +10,8 @@ const FORMAT_STYLES: Record<AdFormat, { visual: string; mood: string }> = {
     mood: "warm, emotive, aspirational, shallow depth of field with beautiful bokeh",
   },
   animated_explainer: {
-    visual: "clean modern product photography, minimalist composition, technology-forward aesthetic",
-    mood: "professional, trustworthy, clean, bright and airy",
+    visual: "flat design 2D illustration, motion graphics style, clean geometric shapes, minimalist tech aesthetic, Notion/Stripe ad style",
+    mood: "professional, trustworthy, clean, bright pastel colors, flat shading, no photorealism",
   },
   product_showcase: {
     visual: "premium product photography, studio-lit hero shot, dramatic lighting on product",
@@ -38,15 +38,22 @@ export function buildImagePrompt(
   brandKit: BrandKit,
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
-  hasProductImage?: boolean
+  hasProductImage?: boolean,
+  characterDescription?: string
 ): string {
   const lines: string[] = [];
   const style = adFormat ? FORMAT_STYLES[adFormat] : null;
+  const isAnimated = adFormat === "animated_explainer";
 
   // 1. Style anchor
   lines.push(style ? style.visual : "Professional commercial advertising photography");
 
-  // 2. Scene description
+  // 2. Character consistency (if humans in the ad)
+  if (characterDescription) {
+    lines.push(`CONSISTENT CHARACTER: ${characterDescription}. This exact person must appear in every scene with identical appearance`);
+  }
+
+  // 3. Scene description
   lines.push(scene.visualPrompt);
 
   // 3. Camera optics
@@ -82,7 +89,11 @@ export function buildImagePrompt(
   }
 
   // 10. Quality
-  lines.push("8K resolution, ultra-sharp detail, professional retouching, no text overlays, no watermarks");
+  if (isAnimated) {
+    lines.push("Clean vector-style illustration, flat design, no photorealism, no 3D rendering, 2D motion graphics aesthetic");
+  } else {
+    lines.push("8K resolution, ultra-sharp detail, professional retouching, no text overlays, no watermarks");
+  }
 
   return lines.join(". ") + ".";
 }
@@ -125,12 +136,18 @@ export function buildVideoPrompt(
   scene: Scene,
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
-  hasProductImage?: boolean
+  hasProductImage?: boolean,
+  characterDescription?: string
 ): string {
   const lines: string[] = [];
   const style = adFormat ? FORMAT_STYLES[adFormat] : null;
 
-  // 1. Scene description
+  // 1. Character consistency
+  if (characterDescription) {
+    lines.push(`CONSISTENT CHARACTER: ${characterDescription}. This person must look identical to previous scenes — same face, hair, clothing, build`);
+  }
+
+  // 2. Scene description
   lines.push(scene.visualPrompt);
 
   // 2. Camera motion — intelligent mapping

@@ -73,6 +73,7 @@ const briefSchema: Schema = {
         "energetic_sports",
       ],
     },
+    characterDescription: { type: SchemaType.STRING },
     duration: { type: SchemaType.NUMBER },
     scenes: {
       type: SchemaType.ARRAY,
@@ -191,19 +192,32 @@ For each of the 3 most relevant platforms, provide:
 ## 6. AD FORMAT
 Select the BEST format from: cinematic_lifestyle, animated_explainer, product_showcase, testimonial_ugc, minimalist_editorial, energetic_sports
 
-## 7. SCENES (3-5 scenes for 15-30s)
-Each scene: detailed visual prompt, camera angle, motion, lighting, duration
+IMPORTANT for animated_explainer: If you select this format, scene visual prompts should describe flat design illustrations, motion graphics, clean UI mockups, and geometric shapes — NOT photorealistic scenes. Think Notion/Stripe style ads with 2D illustrations.
 
-## 8. VOICEOVER SCRIPT
+## 7. CHARACTER DESCRIPTION (if the ad features a human)
+If any scene involves a human character, provide a SINGLE detailed character description that stays IDENTICAL across ALL scenes. Include:
+- Gender, approximate age, ethnicity
+- Hair (color, length, style)
+- Clothing (specific items, colors)
+- Build and distinguishing features
+This ensures visual consistency when each scene is generated separately.
+If the ad is product-only (no humans), set characterDescription to an empty string.
+
+## 8. SCENES (3-5 scenes for 15-30s)
+Each scene: detailed visual prompt, camera angle, motion, lighting, duration.
+CRITICAL: If a character was described above, reference them in EVERY scene using the EXACT same description. Do NOT change their appearance between scenes.
+For animated_explainer format: describe flat 2D illustrations, screen mockups, and motion graphics — not photos.
+
+## 9. VOICEOVER SCRIPT
 Compelling narration timed to scenes
 
-## 9. MUSIC DIRECTION
+## 10. MUSIC DIRECTION
 Genre, tempo (BPM), mood, instruments
 
-## 10. CAMERA SETTINGS
+## 11. CAMERA SETTINGS
 Focal length, aperture, color grade
 
-## 11. END CARD
+## 12. END CARD
 Memorable tagline + CTA text
 
 CALIBRATION EXAMPLES:

@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
       duration = 5,
       cameraSettings,
       adFormat,
+      characterDescription,
     } = body as {
       images: string[];
       scenes: Scene[];
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       duration?: number;
       cameraSettings?: CameraSettings;
       adFormat?: AdFormat;
+      characterDescription?: string;
     };
 
     if (!images?.length || !scenes?.length) {
@@ -69,7 +71,8 @@ export async function POST(req: NextRequest) {
         aspectRatio,
         hasProductImage,
         cameraSettings,
-        adFormat
+        adFormat,
+        characterDescription
       );
 
       const clipPath = path.join(OUTPUT_DIR, `ai_clip_${i}.mp4`);

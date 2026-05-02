@@ -12,13 +12,14 @@ export async function generateImageWithFallback(
   seed?: number,
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
-  hasProductImage?: boolean
+  hasProductImage?: boolean,
+  characterDescription?: string
 ): Promise<Buffer> {
   const errors: string[] = [];
 
   // 1. Pollinations (free, no key needed)
   try {
-    return await generateImage(scene, brandKit, width, height, seed, cameraSettings, adFormat, hasProductImage);
+    return await generateImage(scene, brandKit, width, height, seed, cameraSettings, adFormat, hasProductImage, characterDescription);
   } catch (err) {
     const msg = (err as Error).message;
     errors.push(`Pollinations: ${msg}`);
@@ -28,7 +29,7 @@ export async function generateImageWithFallback(
   // 2. Replicate FLUX Schnell (fast, $0.003/image)
   if (process.env.REPLICATE_API_TOKEN) {
     try {
-      return await generateImageReplicate(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage);
+      return await generateImageReplicate(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Replicate: ${msg}`);
@@ -39,7 +40,7 @@ export async function generateImageWithFallback(
   // 3. Gemini image (requires billing, ~$0.04/image)
   if (process.env.GEMINI_API_KEY) {
     try {
-      return await generateImageGemini(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage);
+      return await generateImageGemini(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Gemini: ${msg}`);
@@ -50,7 +51,7 @@ export async function generateImageWithFallback(
   // 4. Fal.ai (requires FAL_KEY)
   if (process.env.FAL_KEY) {
     try {
-      return await generateImageFal(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage);
+      return await generateImageFal(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Fal.ai: ${msg}`);
