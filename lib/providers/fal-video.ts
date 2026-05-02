@@ -118,28 +118,56 @@ async function pollHiggsfield(requestId: string, apiKey: string, apiSecret: stri
     const interval = elapsed < 60000 ? 10000 : 5000;
     await new Promise((r) => setTimeout(r, interval));
 
-    const statusRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}/status`, {
-      headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
-    });
-    if (!statusRes.ok) continue;
-
-    const data = await statusRes.json();
-    const hfStatus = (data.status || "").toUpperCase();
-
-    if (hfStatus === "COMPLETED") {
-      const resultRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}`, {
+    try {
+      const statusRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}/status`, {
         headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
       });
-      if (!resultRes.ok) throw new Error("Failed to fetch result");
-      const resultData = await resultRes.json();
-      const videoUrl = resultData.video?.url;
-      if (!videoUrl) throw new Error("No video URL in result");
-      const videoRes = await fetch(videoUrl);
-      if (!videoRes.ok) throw new Error("Failed to download video");
-      return Buffer.from(await videoRes.arrayBuffer());
-    }
+      if (!statusRes.ok) continue;
 
-    if (hfStatus === "FAILED") throw new Error("Higgsfield generation failed");
+      const data = await statusRes.json();
+      const hfStatus = (data.status || "").toUpperCase();
+      console.log(`[Higgsfield Video] Status: ${data.status} (${Math.round(elapsed/1000)}s)`);
+
+      if (hfStatus === "COMPLETED") {
+        console.log("[Higgsfield Video] Status response:", JSON.stringify(data).substring(0, 500));
+
+        // Try getting video URL from status response first (same pattern as images)
+        const videoUrl = data.video?.url
+          || data.videos?.[0]?.url
+          || data.output?.url
+          || (typeof data.output === "string" ? data.output : null);
+
+        if (videoUrl) {
+          console.log("[Higgsfield Video] Downloading from status response:", videoUrl.substring(0, 100));
+          const videoRes = await fetch(videoUrl);
+          if (!videoRes.ok) throw new Error(`Failed to download video (${videoRes.status})`);
+          return Buffer.from(await videoRes.arrayBuffer());
+        }
+
+        // Fallback: try /requests/{id} endpoint
+        const resultRes = await fetch(`https://platform.higgsfield.ai/requests/${requestId}`, {
+          headers: { Authorization: `Key ${apiKey}:${apiSecret}` },
+        });
+        if (resultRes.ok) {
+          const resultData = await resultRes.json();
+          console.log("[Higgsfield Video] Result data:", JSON.stringify(resultData).substring(0, 500));
+          const url = resultData.video?.url || resultData.videos?.[0]?.url || resultData.output?.url;
+          if (url) {
+            const videoRes = await fetch(url);
+            if (!videoRes.ok) throw new Error("Failed to download video");
+            return Buffer.from(await videoRes.arrayBuffer());
+          }
+        }
+
+        throw new Error("No video URL found in Higgsfield response");
+      }
+
+      if (hfStatus === "FAILED") throw new Error("Higgsfield video generation failed");
+    } catch (err) {
+      const msg = (err as Error).message || "";
+      if (msg.toLowerCase().includes("failed") || msg.includes("No video")) throw err;
+      console.warn("[Higgsfield Video] Poll error (retrying):", msg);
+    }
   }
 
   throw new Error("Video generation timed out (5 min)");
