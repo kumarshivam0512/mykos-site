@@ -219,16 +219,22 @@ If any scene involves a human, create ONE comprehensive character description us
 If the ad is product-only with no human character, set characterSheet to an empty string.
 
 ## 9. SCENES (3-5 scenes for 15-30s) — EXTREMELY DETAILED
-Each scene MUST reference the backdrop and character by description, not by name. Each scene's visualPrompt should be 200-400 characters minimum and include:
-- What the character is DOING with the product (specific action, hand positions, body language)
-- Where exactly in the backdrop they are (which part of the environment)
-- Product interaction details (which hand holds it, angle visible to camera, label facing direction)
+Each scene's visualPrompt should be 200-400 characters and describe ONLY what is visible in the STILL frame:
+- What the character is doing (specific action, hand positions, body language) — keep actions SMALL and contained
+- Where exactly in the backdrop they are
+- Product interaction details (which hand holds it, label facing camera)
 - Expression/emotion in this specific moment
-- Any environment changes (e.g., "morning light has shifted, casting longer shadows")
+- DO NOT describe camera movement in the visualPrompt — that goes in the motion field
 
-Camera angle: Be specific (e.g., "low angle looking up at 15 degrees" not just "low angle")
-Motion: Be specific (e.g., "Camera pushes in 3 feet over 5 seconds, starting medium shot ending close-up" not just "push in")
-Lighting: Reference the backdrop lighting but add scene-specific modifiers (e.g., "Key light from windows camera-left, LED rim light camera-right creating edge definition on arm muscles")
+Camera angle: Be cinematically specific (e.g., "three-quarter front view, eye-level" not just "close-up")
+
+Motion: Use ONE of these named camera moves EXACTLY:
+dolly in, dolly out, dolly left, dolly right, push in, orbit, 360, pan, crane up, crane down, handheld, crash zoom, static
+Keep motion field to a single named move. The video prompt engine will handle timing.
+
+Lighting: Specific setup referencing the backdrop (e.g., "softbox key light camera-left, warm rim light from behind")
+
+IMPORTANT: Each scene is a 5-second clip. Subject motion must be SMALL — what the source image physically supports. No scene should require the character to walk, run, dance, or dramatically change position.
 
 ## 10. VOICEOVER SCRIPT
 Compelling narration timed to scenes with emotional beats

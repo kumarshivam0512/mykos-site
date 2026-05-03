@@ -95,6 +95,8 @@ async function generateViaHiggsfield(
       image_url: imageUrl,
       duration: Math.min(duration, 10),
       aspect_ratio: aspectRatio,
+      enhance_prompt: false,  // Determinism — don't let Higgsfield rewrite our prompt
+      motion_strength: 0.6,  // 0.5-0.7 for product/realism; higher = more drift risk
     }),
   });
 

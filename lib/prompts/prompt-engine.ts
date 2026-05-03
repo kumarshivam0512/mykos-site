@@ -1,37 +1,36 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
 
-// ─── Unified Prompt Engine ───────────────────────────────────────
-// Single source of truth for ALL image and video prompts.
-// Uses full brief context: scene, camera settings, ad format, brand kit.
+// ─── Production-Grade Prompt Engine ──────────────────────────────
+// Aligned with Higgsfield Ad Prompting Playbook:
+// - Image prompt owns LOOK (composition, subject, lighting, materials, mood)
+// - Video prompt owns MOTION ONLY (camera move, subject action, timing)
+// - One job per prompt. No re-describing identity in video.
 
-const FORMAT_STYLES: Record<AdFormat, { visual: string; mood: string }> = {
-  cinematic_lifestyle: {
-    visual: "cinematic commercial photography, emotional storytelling, human subjects in aspirational settings",
-    mood: "warm, emotive, aspirational, shallow depth of field with beautiful bokeh",
-  },
-  animated_explainer: {
-    visual: "flat design 2D illustration, motion graphics style, clean geometric shapes, minimalist tech aesthetic, Notion/Stripe ad style",
-    mood: "professional, trustworthy, clean, bright pastel colors, flat shading, no photorealism",
-  },
-  product_showcase: {
-    visual: "premium product photography, studio-lit hero shot, dramatic lighting on product",
-    mood: "luxurious, premium, detailed, tactile textures visible",
-  },
-  testimonial_ugc: {
-    visual: "authentic casual photography, natural unposed moments, real-world settings",
-    mood: "relatable, genuine, warm, everyday life context",
-  },
-  minimalist_editorial: {
-    visual: "high-fashion editorial photography, generous negative space, restrained color palette",
-    mood: "sophisticated, understated, elegant, gallery-quality composition",
-  },
-  energetic_sports: {
-    visual: "dynamic action photography, bold colors, high-energy movement captured mid-action",
-    mood: "powerful, motivational, intense, peak performance",
-  },
+// ─── Negative prompt block (reusable) ────────────────────────────
+const NEGATIVE_BLOCK = "no text overlays, no watermarks, no warping, no distortion, no extra fingers, no extra limbs, no facial drift, no identity changes, no flickering, no plastic skin, no over-saturation, no off-brand colors, no cluttered background, no motion blur on the product";
+
+// ─── Image type by ad format ─────────────────────────────────────
+const FORMAT_IMAGE_TYPE: Record<AdFormat, string> = {
+  cinematic_lifestyle: "editorial commercial photography",
+  animated_explainer: "flat design 2D illustration, motion graphics style, clean geometric shapes",
+  product_showcase: "studio product photography",
+  testimonial_ugc: "editorial lifestyle photography",
+  minimalist_editorial: "high-fashion editorial photography",
+  energetic_sports: "dynamic sports commercial photography",
 };
 
-// ─── Image Prompt Builder ────────────────────────────────────────
+const FORMAT_MOOD: Record<AdFormat, string> = {
+  cinematic_lifestyle: "warm, emotive, aspirational",
+  animated_explainer: "professional, trustworthy, clean, bright pastels",
+  product_showcase: "luxurious, premium, tactile textures",
+  testimonial_ugc: "relatable, genuine, warm, authentic",
+  minimalist_editorial: "sophisticated, understated, restrained elegance",
+  energetic_sports: "powerful, motivational, high-energy",
+};
+
+// ─── IMAGE PROMPT (owns: composition, subject, lighting, mood) ──
+// Order: type → subject → setting → lighting → lens → color → composition → quality
+// NO camera moves. NO motion. This is a STILL frame.
 
 export function buildImagePrompt(
   scene: Scene,
@@ -43,100 +42,123 @@ export function buildImagePrompt(
   characterSheet?: string
 ): string {
   const lines: string[] = [];
-  const style = adFormat ? FORMAT_STYLES[adFormat] : null;
   const isAnimated = adFormat === "animated_explainer";
 
-  // 1. Style anchor
-  lines.push(style ? style.visual : "Professional commercial advertising photography");
+  // 1. Image type / medium (FRONT-LOADED — highest weight)
+  lines.push(FORMAT_IMAGE_TYPE[adFormat || "cinematic_lifestyle"] || "professional commercial photography");
 
-  // 2. Scene backdrop (detailed environment)
-  if (sceneBackdrop) {
-    lines.push(`SETTING: ${sceneBackdrop}`);
-  }
-
-  // 3. Character sheet (detailed appearance)
+  // 2. Subject (character + product interaction from scene)
   if (characterSheet) {
-    lines.push(`CHARACTER: ${characterSheet}. This exact person with identical appearance in every detail`);
+    lines.push(characterSheet);
   }
-
-  // 4. Scene-specific action and composition
   lines.push(scene.visualPrompt);
 
-  // 5. Camera optics
-  const cam: string[] = [`${scene.cameraAngle}`];
-  if (cameraSettings?.focalLength) cam.push(`shot on ${cameraSettings.focalLength} lens`);
-  if (cameraSettings?.aperture) cam.push(`${cameraSettings.aperture} aperture, shallow depth of field`);
+  // 3. Setting / context (backdrop)
+  if (sceneBackdrop) {
+    lines.push(sceneBackdrop);
+  }
+
+  // 4. Lighting (specific setup, not just "good lighting")
+  lines.push(scene.lighting);
+
+  // 5. Lens / camera language
+  const cam: string[] = [scene.cameraAngle];
+  if (cameraSettings?.focalLength) cam.push(`${cameraSettings.focalLength} lens`);
+  if (cameraSettings?.aperture) cam.push(`${cameraSettings.aperture}`);
   lines.push(cam.join(", "));
 
-  // 6. Lighting (scene-specific)
-  lines.push(`Lighting: ${scene.lighting}`);
-
-  // 7. Color grading
+  // 6. Color & mood
   if (cameraSettings?.colorGrade) {
-    lines.push(`Color grade: ${cameraSettings.colorGrade}`);
+    lines.push(`${cameraSettings.colorGrade} color palette`);
   }
+  lines.push(FORMAT_MOOD[adFormat || "cinematic_lifestyle"] + " mood");
 
-  // 8. Mood from format
-  if (style) lines.push(style.mood);
-
-  // 9. Motion hint
-  if (scene.motion && scene.motion.toLowerCase() !== "static") {
-    lines.push(`implied sense of ${scene.motion} — captured at the peak moment of action`);
-  }
-
-  // 10. Brand colors
-  if (brandKit.colors.length > 0) {
-    lines.push(`Brand color palette: ${brandKit.colors.join(", ")}`);
-  }
-
-  // 11. Product preservation
+  // 7. Composition / negative space
   if (hasProductImage) {
-    lines.push("The product must be clearly visible, accurately represented with correct colors/logo/text, and the hero of the composition. Product label faces camera.");
+    lines.push("product centered and hero of the composition, product label faces camera, negative space for copy");
   }
 
-  // 12. Quality
+  // 8. Brand colors
+  if (brandKit.colors.length > 0) {
+    lines.push(`brand palette: ${brandKit.colors.join(", ")}`);
+  }
+
+  // 9. Quality cues
   if (isAnimated) {
-    lines.push("Clean vector-style 2D illustration, flat design, no photorealism, motion graphics aesthetic");
+    lines.push("vector-style flat design, no photorealism, 2D motion graphics aesthetic");
   } else {
-    lines.push("Photorealistic, 8K resolution, ultra-sharp detail, professional retouching, cinematic depth of field, no text overlays, no watermarks");
+    lines.push("hyper-detailed textures, photorealistic, 4K, ultra-sharp");
   }
 
-  return lines.join(". ") + ".";
+  // 10. Negative
+  lines.push(`Avoid: ${NEGATIVE_BLOCK}`);
+
+  return lines.join(", ");
 }
 
-// ─── Video Motion Prompt Builder ─────────────────────────────────
+// ─── VIDEO PROMPT (owns: MOTION ONLY) ────────────────────────────
+// Timeline format with time beats. Single named camera move.
+// NO re-describing identity — source image IS the identity.
+// NO lighting/mood — locked from source frame.
 
-const MOTION_MAP: Record<string, string> = {
-  "static": "Camera holds perfectly steady. Only subtle ambient motion — hair sways gently, fabric shifts, light particles drift, liquid steams",
-  "slow dolly forward": "Camera slowly dollies forward toward the subject, creating an intimate push-in that draws the viewer closer",
-  "dolly forward": "Camera slowly dollies forward toward the subject, creating an intimate push-in that draws the viewer closer",
-  "dolly": "Camera performs a smooth dolly movement, gliding forward to reveal detail",
-  "push in": "Camera pushes in slowly and steadily toward the hero product, magnifying its presence",
-  "push": "Camera pushes in slowly and steadily toward the hero product, magnifying its presence",
-  "pull back": "Camera pulls back smoothly and gradually, revealing the full scene and broader context",
-  "pull": "Camera pulls back smoothly and gradually, revealing the full scene and broader context",
-  "reveal": "Camera pulls back to reveal the complete scene in a dramatic unveiling motion",
-  "orbit": "Camera smoothly orbits around the subject in a 90-degree arc, showcasing it from multiple angles with consistent lighting",
-  "arc": "Camera arcs around the subject, creating a dynamic perspective shift while keeping the subject centered",
-  "pan": "Camera pans slowly from left to right in a controlled horizontal sweep, revealing the scene progressively",
-  "pan left": "Camera pans from right to left, following the scene's natural flow",
-  "pan right": "Camera pans from left to right, following the scene's natural flow",
-  "tilt": "Camera tilts smoothly upward, transitioning from ground-level detail to the wider environment",
-  "tilt up": "Camera tilts smoothly upward, transitioning from product detail to the wider scene",
-  "tilt down": "Camera tilts downward, descending from wide environment to focus on the product",
-  "crane": "Camera cranes upward in a grand sweeping motion, elevating from subject level to an aerial perspective",
-  "crane up": "Camera cranes upward in a grand sweeping motion, elevating the perspective dramatically",
-  "handheld": "Handheld camera with natural, organic micro-movements adds authenticity and energy to the shot",
-  "tracking": "Camera tracks alongside the subject with smooth lateral movement, maintaining consistent framing",
-  "handheld tracking": "Handheld camera gently tracks the subject with natural micro-movements and organic energy",
-  "zoom": "Smooth optical zoom into the subject, drawing the viewer's eye to the key details and textures",
-  "slow zoom": "Very slow, almost imperceptible zoom drawing the viewer deeper into the scene",
-  "zoom in": "Smooth zoom pushing into the subject to highlight key details",
-  "zoom out": "Smooth zoom pulling out to reveal the broader scene context",
-  "rotation": "Subject slowly rotates (or camera rotates around subject), showcasing the product from all angles",
-  "360": "Full 360-degree rotation around the subject, showcasing every angle and detail",
-  "slow motion": "Scene plays in cinematic slow motion, emphasizing every detail of the motion and texture",
+// Named camera moves (use Higgsfield's vocabulary verbatim)
+const NAMED_MOVES: Record<string, string> = {
+  "static": "camera_fixed",
+  "dolly in": "dolly-in",
+  "dolly out": "dolly-out",
+  "dolly forward": "dolly-in",
+  "dolly left": "dolly-left",
+  "dolly right": "dolly-right",
+  "push in": "push-in",
+  "push": "push-in",
+  "pull back": "dolly-out",
+  "pull": "dolly-out",
+  "orbit": "orbit_360_slow",
+  "360": "orbit_360_slow",
+  "arc": "orbit_360_slow",
+  "pan": "dolly-right",
+  "pan left": "dolly-left",
+  "pan right": "dolly-right",
+  "tilt up": "crane-up",
+  "tilt down": "crane-down",
+  "tilt": "crane-up",
+  "crane up": "crane-up",
+  "crane down": "crane-down",
+  "crane": "crane-up",
+  "handheld": "handheld",
+  "tracking": "dolly-right",
+  "handheld tracking": "handheld",
+  "zoom": "push-in",
+  "zoom in": "push-in",
+  "zoom out": "dolly-out",
+  "slow zoom": "push-in",
+  "crash zoom": "crash-zoom",
+  "rotation": "orbit_360_slow",
+  "slow motion": "camera_fixed",
+  "reveal": "dolly-out",
+  "fpv": "fpv-drone",
+  "drone": "fpv-drone",
+  "bullet time": "bullet-time",
 };
+
+function getNamedMove(motion: string): string {
+  const lower = motion.toLowerCase().trim();
+  if (NAMED_MOVES[lower]) return NAMED_MOVES[lower];
+  for (const [key, val] of Object.entries(NAMED_MOVES)) {
+    if (lower.includes(key) || key.includes(lower)) return val;
+  }
+  return "push-in"; // safe default
+}
+
+function describeSubjectMotion(scene: Scene): string {
+  // Keep subject motion SMALL — big motion breaks physics
+  const motionLower = (scene.motion || "").toLowerCase();
+  if (motionLower === "static" || !motionLower) {
+    return "Subject holds position. Only subtle ambient motion — hair shifts, fabric settles, light plays on surfaces";
+  }
+  // Extract any subject action from the visual prompt (first action verb phrase)
+  return "Subject performs the action described in the source frame with minimal movement — small, controlled, natural";
+}
 
 export function buildVideoPrompt(
   scene: Scene,
@@ -146,66 +168,40 @@ export function buildVideoPrompt(
   sceneBackdrop?: string,
   characterSheet?: string
 ): string {
+  const namedMove = getNamedMove(scene.motion || "push in");
+  const isStatic = namedMove === "camera_fixed";
+
+  // Timeline format — Higgsfield reads this best
   const lines: string[] = [];
-  const style = adFormat ? FORMAT_STYLES[adFormat] : null;
 
-  // 1. Scene backdrop (environment context)
-  if (sceneBackdrop) {
-    lines.push(`SETTING: ${sceneBackdrop}`);
+  lines.push(`Shot intent: ${scene.visualPrompt.substring(0, 100)}`);
+  lines.push("");
+
+  // Time beats
+  if (isStatic) {
+    lines.push("0-1s: Frame as shown in source image, subject settled");
+    lines.push("1-4s: Subtle ambient motion only — fabric shifts, light plays, atmosphere breathes");
+    lines.push("4-5s: Hold on the composition, natural settling");
+  } else {
+    lines.push("0-1s: Opening frame as shown in source image");
+    lines.push(`1-4s: Camera performs ${namedMove.replace(/-/g, " ")}; subject has minimal controlled movement`);
+    lines.push("4-5s: Camera settles, composition resolves");
   }
 
-  // 2. Character sheet (detailed appearance)
-  if (characterSheet) {
-    lines.push(`CHARACTER: ${characterSheet}. Must look identical across all scenes — same face, hair, clothing, build, skin tone`);
-  }
+  lines.push("");
+  lines.push(`Camera: ${namedMove.replace(/-/g, " ")}`);
+  lines.push(`Subject motion: ${describeSubjectMotion(scene)}`);
+  lines.push("Lighting: stable from source frame, no changes");
 
-  // 2. Scene description
-  lines.push(scene.visualPrompt);
-
-  // 2. Camera motion — intelligent mapping
-  const motionLower = (scene.motion || "static").toLowerCase().trim();
-  lines.push(findBestMotionMatch(motionLower));
-
-  // 3. Shot framing
-  lines.push(`Shot framing: ${scene.cameraAngle}`);
-
-  // 4. Lighting
-  lines.push(`Lighting: ${scene.lighting}`);
-
-  // 5. Lens character
-  if (cameraSettings?.focalLength) {
-    lines.push(`Lens: ${cameraSettings.focalLength} — ${getLensCharacter(cameraSettings.focalLength)}`);
-  }
-
-  // 6. Color mood
-  if (cameraSettings?.colorGrade) {
-    lines.push(`Color mood: ${cameraSettings.colorGrade}`);
-  }
-
-  // 7. Product preservation
+  // Product preservation (keep minimal in video prompt)
   if (hasProductImage) {
-    lines.push(
-      "CRITICAL INSTRUCTION: The product shown in this image is the hero subject. " +
-      "It MUST remain completely unchanged throughout — " +
-      "exact same shape, colors, logo placement, text, packaging, and proportions. " +
-      "Do NOT morph, warp, redesign, recolor, or obscure any part of the product. " +
-      "The product must be clearly recognizable as identical to the input image in every frame."
-    );
+    lines.push("Product: must remain sharp, unwarped, and recognizable in every frame");
   }
 
-  // 8. Style from ad format
-  if (style) {
-    lines.push(`Visual style: ${style.mood}`);
-  }
+  // Negatives
+  lines.push(`Negatives: ${NEGATIVE_BLOCK}, no background chatter, no extra music`);
 
-  // 9. Quality constraints
-  lines.push(
-    "Output quality: Professional cinematic commercial. " +
-    "Smooth 24fps-quality motion with no sudden jumps, frame skips, or warping artifacts. " +
-    "Photorealistic rendering with natural physics — gravity, fabric drape, liquid behavior, light refraction all physically accurate."
-  );
-
-  return lines.join(". ");
+  return lines.join("\n");
 }
 
 // ─── End Card Prompt ─────────────────────────────────────────────
@@ -216,43 +212,17 @@ export function buildEndCardPrompt(
   brandKit: BrandKit,
   adFormat?: AdFormat
 ): string {
-  const style = adFormat ? FORMAT_STYLES[adFormat] : null;
-  const parts = [
-    "Minimalist advertising end card design",
-    `Hero product: ${productName}`,
-    `Tagline: "${tagline}"`,
-    "Clean, centered typography composition",
-    style ? `Style: ${style.mood}` : "Dark elegant background",
+  const lines = [
+    "Studio product photography end card",
+    `product: ${productName}`,
+    `tagline text: "${tagline}"`,
+    "clean centered composition, premium feel",
+    adFormat ? `${FORMAT_MOOD[adFormat]} mood` : "dark elegant background",
   ];
-
   if (brandKit.colors.length > 0) {
-    parts.push(`Accent colors: ${brandKit.colors.join(", ")}`);
+    lines.push(`brand colors: ${brandKit.colors.join(", ")}`);
   }
-
-  parts.push("Professional quality, no placeholder text, ready for commercial use");
-  return parts.join(". ") + ".";
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────
-
-function findBestMotionMatch(motion: string): string {
-  if (MOTION_MAP[motion]) return MOTION_MAP[motion];
-  for (const [key, desc] of Object.entries(MOTION_MAP)) {
-    if (motion.includes(key) || key.includes(motion)) return desc;
-  }
-  if (motion && motion !== "static") {
-    return `Camera movement: ${motion}. Executed smoothly and cinematically with no sudden changes.`;
-  }
-  return MOTION_MAP["static"];
-}
-
-function getLensCharacter(focalLength: string): string {
-  const mm = parseInt(focalLength);
-  if (isNaN(mm)) return "natural perspective";
-  if (mm <= 24) return "wide-angle, environmental context, dramatic space";
-  if (mm <= 35) return "natural wide, slight environmental context";
-  if (mm <= 50) return "natural human-eye perspective, balanced";
-  if (mm <= 85) return "portrait compression, subject isolation, creamy bokeh";
-  if (mm <= 135) return "telephoto, strong subject isolation";
-  return "extreme telephoto, heavy background compression";
+  lines.push("professional quality, no placeholder text");
+  lines.push(`Avoid: ${NEGATIVE_BLOCK}`);
+  return lines.join(", ");
 }
