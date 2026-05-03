@@ -10,7 +10,8 @@ export async function generateImageGemini(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   hasProductImage?: boolean,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): Promise<Buffer> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
@@ -18,7 +19,7 @@ export async function generateImageGemini(
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
 
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, characterDescription);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
 
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],

@@ -14,14 +14,15 @@ export async function generateImageWithFallback(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   hasProductImage?: boolean,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): Promise<Buffer> {
   const errors: string[] = [];
 
   // 1. Higgsfield Soul 2.0 (best quality, uses same API key as video)
   if (process.env.HIGGSFIELD_KEY && process.env.HIGGSFIELD_SECRET) {
     try {
-      const result = await generateImageHiggsfield(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
+      const result = await generateImageHiggsfield(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
       return result.buffer;
     } catch (err) {
       const msg = (err as Error).message;
@@ -32,7 +33,7 @@ export async function generateImageWithFallback(
 
   // 2. Pollinations (free, no key needed)
   try {
-    return await generateImage(scene, brandKit, width, height, seed, cameraSettings, adFormat, hasProductImage, characterDescription);
+    return await generateImage(scene, brandKit, width, height, seed, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
   } catch (err) {
     const msg = (err as Error).message;
     errors.push(`Pollinations: ${msg}`);
@@ -42,7 +43,7 @@ export async function generateImageWithFallback(
   // 2. Replicate FLUX Schnell (fast, $0.003/image)
   if (process.env.REPLICATE_API_TOKEN) {
     try {
-      return await generateImageReplicate(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
+      return await generateImageReplicate(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Replicate: ${msg}`);
@@ -53,7 +54,7 @@ export async function generateImageWithFallback(
   // 3. Gemini image (requires billing, ~$0.04/image)
   if (process.env.GEMINI_API_KEY) {
     try {
-      return await generateImageGemini(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
+      return await generateImageGemini(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Gemini: ${msg}`);
@@ -64,7 +65,7 @@ export async function generateImageWithFallback(
   // 4. Fal.ai (requires FAL_KEY)
   if (process.env.FAL_KEY) {
     try {
-      return await generateImageFal(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, characterDescription);
+      return await generateImageFal(scene, brandKit, width, height, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
     } catch (err) {
       const msg = (err as Error).message;
       errors.push(`Fal.ai: ${msg}`);

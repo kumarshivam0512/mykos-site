@@ -12,9 +12,10 @@ export async function generateImage(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   hasProductImage?: boolean,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): Promise<Buffer> {
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, characterDescription);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
   const params = new URLSearchParams({
     width: String(width),
     height: String(height),

@@ -11,7 +11,7 @@ const OUTPUT_DIR = path.join(process.cwd(), "public", "output");
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { scenes, brandKit, aspectRatio = "16:9", textOverlays, cameraSettings, adFormat, hasProductImage, characterDescription, useHiggsfield = false } = body as {
+    const { scenes, brandKit, aspectRatio = "16:9", textOverlays, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, useHiggsfield = false } = body as {
       scenes: Scene[];
       brandKit: BrandKit;
       aspectRatio?: string;
@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
       cameraSettings?: CameraSettings;
       adFormat?: AdFormat;
       hasProductImage?: boolean;
-      characterDescription?: string;
+      sceneBackdrop?: string;
+      characterSheet?: string;
       useHiggsfield?: boolean;
     };
 
@@ -47,14 +48,14 @@ export async function POST(req: NextRequest) {
       if (useHiggsfield && process.env.HIGGSFIELD_KEY && process.env.HIGGSFIELD_SECRET) {
         const result = await generateImageHiggsfield(
           scene, brandKit, dimensions.width, dimensions.height,
-          cameraSettings, adFormat, hasProductImage, characterDescription
+          cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet
         );
         buffer = result.buffer;
         sourceUrl = result.sourceUrl;
       } else {
         buffer = await generateImageWithFallback(
           scene, brandKit, dimensions.width, dimensions.height,
-          Date.now() + i, cameraSettings, adFormat, hasProductImage, characterDescription
+          Date.now() + i, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet
         );
       }
       if (sourceUrl) sourceUrls.push(sourceUrl);

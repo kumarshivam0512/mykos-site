@@ -73,7 +73,8 @@ const briefSchema: Schema = {
         "energetic_sports",
       ],
     },
-    characterDescription: { type: SchemaType.STRING },
+    sceneBackdrop: { type: SchemaType.STRING },
+    characterSheet: { type: SchemaType.STRING },
     duration: { type: SchemaType.NUMBER },
     scenes: {
       type: SchemaType.ARRAY,
@@ -116,6 +117,8 @@ const briefSchema: Schema = {
     "personas",
     "platformBriefs",
     "adFormat",
+    "sceneBackdrop",
+    "characterSheet",
     "duration",
     "scenes",
     "voiceoverScript",
@@ -192,41 +195,61 @@ For each of the 3 most relevant platforms, provide:
 ## 6. AD FORMAT
 Select the BEST format from: cinematic_lifestyle, animated_explainer, product_showcase, testimonial_ugc, minimalist_editorial, energetic_sports
 
-IMPORTANT for animated_explainer: If you select this format, scene visual prompts should describe flat design illustrations, motion graphics, clean UI mockups, and geometric shapes — NOT photorealistic scenes. Think Notion/Stripe style ads with 2D illustrations.
+IMPORTANT for animated_explainer: scene prompts should describe flat 2D illustrations, motion graphics, UI mockups — NOT photorealistic scenes.
 
-## 7. CHARACTER DESCRIPTION (if the ad features a human)
-If any scene involves a human character, provide a SINGLE detailed character description that stays IDENTICAL across ALL scenes. Include:
-- Gender, approximate age, ethnicity
-- Hair (color, length, style)
-- Clothing (specific items, colors)
-- Build and distinguishing features
-This ensures visual consistency when each scene is generated separately.
-If the ad is product-only (no humans), set characterDescription to an empty string.
+## 7. SCENE BACKDROP (sceneBackdrop field — EXTREMELY DETAILED)
+Create ONE detailed environment description that ALL scenes share. This is the physical location/setting. Include:
+- Location type and specific details (e.g., "modern minimalist gym with floor-to-ceiling windows facing east")
+- Floor material, wall material, wall colors with finish (e.g., "polished concrete floors, matte charcoal walls with subtle grain texture")
+- Furniture/equipment (specific items, materials, colors)
+- Lighting setup: natural light sources (direction, time of day, color temperature in Kelvin), artificial lights (type, color, position)
+- Atmospheric elements (dust particles in light beams, steam, condensation, ambient haze)
+- Color temperature of the environment (warm/cool, specific Kelvin if relevant)
+This backdrop is referenced by all scenes — it must be ONE consistent location.
+If using animated_explainer format, describe a flat design workspace/digital environment instead.
 
-## 8. SCENES (3-5 scenes for 15-30s)
-Each scene: detailed visual prompt, camera angle, motion, lighting, duration.
-CRITICAL: If a character was described above, reference them in EVERY scene using the EXACT same description. Do NOT change their appearance between scenes.
-For animated_explainer format: describe flat 2D illustrations, screen mockups, and motion graphics — not photos.
+## 8. CHARACTER SHEET (characterSheet field — EXTREMELY DETAILED)
+If any scene involves a human, create ONE comprehensive character description used in ALL scenes. Include:
+- Gender, exact age, ethnicity, height (cm), weight (kg), build type
+- Face: jawline shape, facial hair, eyebrow thickness, eye color, skin tone (be specific e.g., "medium olive-brown")
+- Hair: color, length on top/sides, texture, styling product used
+- Outfit: EXACT clothing items with colors, fit, brand style (e.g., "fitted charcoal compression tee showing arm definition, black mid-thigh training shorts, white Nike Air Force 1 mid-tops with grey swoosh")
+- Skin details: sheen, perspiration level, any visible features
+- Default expression and energy
+If the ad is product-only with no human character, set characterSheet to an empty string.
 
-## 9. VOICEOVER SCRIPT
-Compelling narration timed to scenes
+## 9. SCENES (3-5 scenes for 15-30s) — EXTREMELY DETAILED
+Each scene MUST reference the backdrop and character by description, not by name. Each scene's visualPrompt should be 200-400 characters minimum and include:
+- What the character is DOING with the product (specific action, hand positions, body language)
+- Where exactly in the backdrop they are (which part of the environment)
+- Product interaction details (which hand holds it, angle visible to camera, label facing direction)
+- Expression/emotion in this specific moment
+- Any environment changes (e.g., "morning light has shifted, casting longer shadows")
 
-## 10. MUSIC DIRECTION
-Genre, tempo (BPM), mood, instruments
+Camera angle: Be specific (e.g., "low angle looking up at 15 degrees" not just "low angle")
+Motion: Be specific (e.g., "Camera pushes in 3 feet over 5 seconds, starting medium shot ending close-up" not just "push in")
+Lighting: Reference the backdrop lighting but add scene-specific modifiers (e.g., "Key light from windows camera-left, LED rim light camera-right creating edge definition on arm muscles")
 
-## 11. CAMERA SETTINGS
-Focal length, aperture, color grade
+## 10. VOICEOVER SCRIPT
+Compelling narration timed to scenes with emotional beats
 
-## 12. END CARD
+## 11. MUSIC DIRECTION
+Genre, tempo (BPM), mood, instruments, reference tracks
+
+## 12. CAMERA SETTINGS
+Focal length with lens character, aperture for DOF, color grade name (e.g., "orange-teal", "warm desaturated", "cool clinical")
+
+## 13. END CARD
 Memorable tagline + CTA text
 
 CALIBRATION EXAMPLES:
 
-Product: "Nike Air Max" → 3 personas: "Jake" (18, sneakerhead), "Priya" (25, fitness runner), "Marcus" (32, streetwear collector)
-Platform briefs: Instagram Reels (9:16, 15s, energetic), YouTube (16:9, 30s, cinematic), TikTok (9:16, 10s, trend-driven)
+Product: "Avvatar Whey Protein" →
+sceneBackdrop: "Modern industrial gym with exposed brick walls, rubber flooring, chrome free-weight racks, floor-to-ceiling windows facing east with early morning golden light (5500K) streaming in, creating long diagonal shadows across the floor. LED strip lights along ceiling edges emit cool 4000K accent light. Slight dust particles visible in window light beams."
+characterSheet: "Indian male, 28 years old, 175cm/72kg, athletic lean build with visible arm definition. Angular jawline, short dark stubble, thick dark eyebrows, brown eyes, medium-brown skin with slight perspiration sheen. Black hair cropped short on sides, slightly longer on top styled with matte product. Wearing fitted charcoal compression tee, black mid-thigh training shorts, white Nike mid-top sneakers. Expression: focused, confident, slight half-smile."
 
-Product: "Notion" → 3 personas: "Sarah" (28, startup PM), "David" (35, engineering lead), "Maya" (22, freelancer)
-Platform briefs: YouTube (16:9, 30s, tutorial-style), LinkedIn (1:1, 15s, professional), Twitter/X (16:9, 6s, quick demo)
+Product: "Nike Air Max" → 3 personas, sceneBackdrop about urban nighttime street with neon
+Product: "Notion" → animated_explainer, no character needed, digital workspace backdrop
 
 Generate the complete brief now.`;
 

@@ -14,13 +14,14 @@ export async function generateImageHiggsfield(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   hasProductImage?: boolean,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): Promise<HiggsfieldImageResult> {
   const apiKey = process.env.HIGGSFIELD_KEY;
   const apiSecret = process.env.HIGGSFIELD_SECRET;
   if (!apiKey || !apiSecret) throw new Error("HIGGSFIELD_KEY and HIGGSFIELD_SECRET required");
 
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, characterDescription);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
   const aspectRatio = getAspectRatio(width, height);
 
   // Submit to Higgsfield Soul 2.0
@@ -33,6 +34,7 @@ export async function generateImageHiggsfield(
     body: JSON.stringify({
       prompt,
       aspect_ratio: aspectRatio,
+      resolution: "1080p",
     }),
   });
 

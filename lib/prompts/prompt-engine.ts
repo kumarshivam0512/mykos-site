@@ -39,7 +39,8 @@ export function buildImagePrompt(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   hasProductImage?: boolean,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): string {
   const lines: string[] = [];
   const style = adFormat ? FORMAT_STYLES[adFormat] : null;
@@ -48,51 +49,56 @@ export function buildImagePrompt(
   // 1. Style anchor
   lines.push(style ? style.visual : "Professional commercial advertising photography");
 
-  // 2. Character consistency (if humans in the ad)
-  if (characterDescription) {
-    lines.push(`CONSISTENT CHARACTER: ${characterDescription}. This exact person must appear in every scene with identical appearance`);
+  // 2. Scene backdrop (detailed environment)
+  if (sceneBackdrop) {
+    lines.push(`SETTING: ${sceneBackdrop}`);
   }
 
-  // 3. Scene description
+  // 3. Character sheet (detailed appearance)
+  if (characterSheet) {
+    lines.push(`CHARACTER: ${characterSheet}. This exact person with identical appearance in every detail`);
+  }
+
+  // 4. Scene-specific action and composition
   lines.push(scene.visualPrompt);
 
-  // 3. Camera optics
-  const cam: string[] = [`${scene.cameraAngle} shot`];
+  // 5. Camera optics
+  const cam: string[] = [`${scene.cameraAngle}`];
   if (cameraSettings?.focalLength) cam.push(`shot on ${cameraSettings.focalLength} lens`);
-  if (cameraSettings?.aperture) cam.push(`${cameraSettings.aperture} aperture`);
+  if (cameraSettings?.aperture) cam.push(`${cameraSettings.aperture} aperture, shallow depth of field`);
   lines.push(cam.join(", "));
 
-  // 4. Lighting
-  lines.push(`${scene.lighting} lighting`);
+  // 6. Lighting (scene-specific)
+  lines.push(`Lighting: ${scene.lighting}`);
 
-  // 5. Color grading
+  // 7. Color grading
   if (cameraSettings?.colorGrade) {
-    lines.push(`${cameraSettings.colorGrade} color grade`);
+    lines.push(`Color grade: ${cameraSettings.colorGrade}`);
   }
 
-  // 6. Mood
+  // 8. Mood from format
   if (style) lines.push(style.mood);
 
-  // 7. Motion hint
+  // 9. Motion hint
   if (scene.motion && scene.motion.toLowerCase() !== "static") {
-    lines.push(`implied sense of ${scene.motion} — captured at the peak moment`);
+    lines.push(`implied sense of ${scene.motion} — captured at the peak moment of action`);
   }
 
-  // 8. Brand colors
+  // 10. Brand colors
   if (brandKit.colors.length > 0) {
-    lines.push(`Color palette incorporating brand colors: ${brandKit.colors.join(", ")}`);
+    lines.push(`Brand color palette: ${brandKit.colors.join(", ")}`);
   }
 
-  // 9. Product preservation
+  // 11. Product preservation
   if (hasProductImage) {
-    lines.push("The product must be clearly visible, accurately represented, and the hero of the composition");
+    lines.push("The product must be clearly visible, accurately represented with correct colors/logo/text, and the hero of the composition. Product label faces camera.");
   }
 
-  // 10. Quality
+  // 12. Quality
   if (isAnimated) {
-    lines.push("Clean vector-style illustration, flat design, no photorealism, no 3D rendering, 2D motion graphics aesthetic");
+    lines.push("Clean vector-style 2D illustration, flat design, no photorealism, motion graphics aesthetic");
   } else {
-    lines.push("8K resolution, ultra-sharp detail, professional retouching, no text overlays, no watermarks");
+    lines.push("Photorealistic, 8K resolution, ultra-sharp detail, professional retouching, cinematic depth of field, no text overlays, no watermarks");
   }
 
   return lines.join(". ") + ".";
@@ -137,14 +143,20 @@ export function buildVideoPrompt(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   hasProductImage?: boolean,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): string {
   const lines: string[] = [];
   const style = adFormat ? FORMAT_STYLES[adFormat] : null;
 
-  // 1. Character consistency
-  if (characterDescription) {
-    lines.push(`CONSISTENT CHARACTER: ${characterDescription}. This person must look identical to previous scenes — same face, hair, clothing, build`);
+  // 1. Scene backdrop (environment context)
+  if (sceneBackdrop) {
+    lines.push(`SETTING: ${sceneBackdrop}`);
+  }
+
+  // 2. Character sheet (detailed appearance)
+  if (characterSheet) {
+    lines.push(`CHARACTER: ${characterSheet}. Must look identical across all scenes — same face, hair, clothing, build, skin tone`);
   }
 
   // 2. Scene description

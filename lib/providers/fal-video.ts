@@ -32,10 +32,11 @@ export async function generateVideoClip(
   hasProductImage: boolean = false,
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): Promise<Buffer> {
   const resolvedModel = resolveModel(model);
-  const prompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, characterDescription);
+  const prompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
 
   console.log(`[Video] Model: ${resolvedModel}, Duration: ${duration}s, Prompt length: ${prompt.length}`);
 
@@ -64,10 +65,10 @@ export async function generateVideoClip(
 
 function resolveModel(model: VideoModel): string {
   if (model !== "auto") return model;
-  if (process.env.HIGGSFIELD_KEY) return "kling-2.1-standard";
+  if (process.env.HIGGSFIELD_KEY) return "kling-2.1-pro"; // Pro for production quality
   if (process.env.REPLICATE_API_TOKEN) return "wan-2.2";
   if (process.env.FAL_KEY) return "kling-2.1-pro";
-  return "kling-2.1-standard";
+  return "kling-2.1-pro";
 }
 
 // ─── Higgsfield ──────────────────────────────────────────────────

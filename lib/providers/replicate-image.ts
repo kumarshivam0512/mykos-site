@@ -9,12 +9,13 @@ export async function generateImageReplicate(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   hasProductImage?: boolean,
-  characterDescription?: string
+  sceneBackdrop?: string,
+  characterSheet?: string
 ): Promise<Buffer> {
   const apiToken = process.env.REPLICATE_API_TOKEN;
   if (!apiToken) throw new Error("REPLICATE_API_TOKEN not configured");
 
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, characterDescription);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
 
   // Submit prediction
   const submitRes = await fetch("https://api.replicate.com/v1/predictions", {

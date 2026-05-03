@@ -100,7 +100,8 @@ export default function GeneratePage() {
             cameraSettings: brief.cameraSettings,
             adFormat: brief.adFormat,
             hasProductImage: !!brandKit.logoUrl,
-            characterDescription: brief.characterDescription,
+            sceneBackdrop: brief.sceneBackdrop,
+            characterSheet: brief.characterSheet,
             useHiggsfield: videoMode === "ai_video",
           }),
         });
@@ -131,7 +132,8 @@ export default function GeneratePage() {
             hasProductImage: !!brandKit.logoUrl,
             cameraSettings: brief.cameraSettings,
             adFormat: brief.adFormat,
-            characterDescription: brief.characterDescription,
+            sceneBackdrop: brief.sceneBackdrop,
+            characterSheet: brief.characterSheet,
             sourceUrls: currentSourceUrls,
           }),
         });
@@ -223,7 +225,8 @@ export default function GeneratePage() {
           hasProductImage: !!brandKit.logoUrl,
           cameraSettings: brief.cameraSettings,
           adFormat: brief.adFormat,
-          characterDescription: brief.characterDescription,
+          sceneBackdrop: brief.sceneBackdrop,
+            characterSheet: brief.characterSheet,
         }),
       });
       if (!res.ok) {
@@ -255,7 +258,8 @@ export default function GeneratePage() {
           cameraSettings: brief.cameraSettings,
           adFormat: brief.adFormat,
           hasProductImage: !!brandKit.logoUrl,
-          characterDescription: brief.characterDescription,
+          sceneBackdrop: brief.sceneBackdrop,
+            characterSheet: brief.characterSheet,
           useHiggsfield: videoMode === "ai_video",
         }),
       });
