@@ -4,399 +4,317 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAdStore } from "@/store/use-ad-store";
 import {
+  Palette,
+  Plus,
+  Trash2,
+  Loader2,
   Sparkles,
+  Image as ImageIcon,
   Upload,
+  Eye,
   ChevronDown,
   ChevronUp,
-  Palette,
-  Loader2,
-  Zap,
-  Trash2,
 } from "lucide-react";
 
-export default function Home() {
-  const router = useRouter();
-  const { productInput, setProductInput, setBrandKit, setBrief, setPipelineStep, reset, brief } =
-    useAdStore();
+interface SceneInput {
+  id: string;
+  mood: string;
+  setting: string;
+  characterAction: string;
+  productPlacement: string;
+  cameraAngle: string;
+  lighting: string;
+  colorGrade: string;
+}
 
-  const [showBrandKit, setShowBrandKit] = useState(false);
-  const [loading, setLoading] = useState(false);
+const MOODS = ["Aspirational", "Energetic", "Calm", "Luxurious", "Playful", "Gritty", "Professional", "Warm", "Dramatic", "Minimal"];
+const CAMERA_ANGLES = ["Close-up, eye-level", "Wide shot, eye-level", "Medium shot, three-quarter", "Low angle, heroic", "Overhead, top-down", "Macro detail", "Profile, side view", "Over-the-shoulder"];
+const LIGHTING_PRESETS = ["Golden hour backlight", "Studio softbox, key + fill", "Natural window light", "Dramatic rim light", "Neon-lit, moody", "Bright and airy", "Warm practical lamps", "Cool clinical"];
+const COLOR_GRADES = ["Warm cinematic", "Cool clinical", "Orange-teal", "Desaturated matte", "Vibrant saturated", "Warm desaturated", "Moody dark", "Bright pastel"];
+
+function createEmptyScene(): SceneInput {
+  return {
+    id: `scene_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    mood: "Aspirational",
+    setting: "",
+    characterAction: "",
+    productPlacement: "",
+    cameraAngle: "Medium shot, three-quarter",
+    lighting: "Studio softbox, key + fill",
+    colorGrade: "Warm cinematic",
+  };
+}
+
+export default function SceneBuilderPage() {
+  const router = useRouter();
+  const { productInput, brandKit, brief } = useAdStore();
+
+  const [scenes, setScenes] = useState<SceneInput[]>([createEmptyScene()]);
+  const [expandedScene, setExpandedScene] = useState<string | null>(scenes[0]?.id);
+  const [generating, setGenerating] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState<{ sceneId: string; url: string; sourceUrl?: string }[]>([]);
   const [error, setError] = useState("");
   const [productImage, setProductImage] = useState<File | null>(null);
+  const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [colorInputs, setColorInputs] = useState(["#a855f7", "#7c3aed", "#1e1b4b"]);
-  const [competitorName, setCompetitorName] = useState("");
-  const [productUrl, setProductUrl] = useState("");
-  const [scrapingUrl, setScrapingUrl] = useState(false);
 
-  const hasPreviousSession = !!(brief || productInput.name);
+  const addScene = () => {
+    const newScene = createEmptyScene();
+    setScenes([...scenes, newScene]);
+    setExpandedScene(newScene.id);
+  };
 
-  const handleSubmit = useCallback(async () => {
-    if (!productInput.name.trim() || !productInput.description.trim()) {
-      setError("Please enter a product name and description");
+  const removeScene = (id: string) => {
+    if (scenes.length <= 1) return;
+    setScenes(scenes.filter((s) => s.id !== id));
+    setGeneratedImages(generatedImages.filter((g) => g.sceneId !== id));
+  };
+
+  const updateScene = (id: string, updates: Partial<SceneInput>) => {
+    setScenes(scenes.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  };
+
+  const generateSceneImages = useCallback(async () => {
+    if (!productInput.name) {
+      setError("Set up your brand first in the Brand Hub");
       return;
     }
 
-    setLoading(true);
+    setGenerating(true);
     setError("");
-    setPipelineStep("generating_brief", "Analyzing your product...");
 
     try {
-      // Upload logo if provided
-      let logoUrl: string | undefined;
-      if (logoFile) {
-        const formData = new FormData();
-        formData.append("file", logoFile);
-        formData.append("type", "logo");
-        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-        if (uploadRes.ok) {
-          const { url } = await uploadRes.json();
-          logoUrl = url;
-        }
-      }
-
       // Upload product image if provided
-      if (productImage) {
+      if (productImage && !productImageUrl) {
         const formData = new FormData();
         formData.append("file", productImage);
         formData.append("type", "product");
         const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
         if (uploadRes.ok) {
           const { url } = await uploadRes.json();
-          setProductInput({ imageUrl: url });
+          setProductImageUrl(url);
         }
       }
 
-      // Save brand kit
-      setBrandKit({ colors: colorInputs.filter(Boolean), logoUrl });
-
-      // Generate brief via AI Creative Director
-      const res = await fetch("/api/creative-director", {
+      // Generate image for each scene using the scene-to-prompt API
+      const res = await fetch("/api/scene-to-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: productInput.name,
-          description: productInput.description,
-          brandColors: colorInputs.filter(Boolean),
-          competitorName: competitorName.trim() || undefined,
+          scenes,
+          productName: productInput.name,
+          productDescription: productInput.description,
+          brandColors: brandKit.colors,
+          sceneBackdrop: brief?.sceneBackdrop,
+          characterSheet: brief?.characterSheet,
+          hasProductImage: !!productImageUrl || !!productImage,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to generate brief");
+        throw new Error(data.error || "Failed to generate scenes");
       }
 
-      const brief = await res.json();
-      setBrief(brief);
-
-      // Auto-save campaign to Cosmos DB
-      try {
-        await fetch("/api/campaigns", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productInput,
-            brandKit: { colors: colorInputs.filter(Boolean), logoUrl },
-            brief,
-            competitorName: competitorName.trim() || undefined,
-          }),
-        });
-      } catch {
-        // Non-blocking — campaign saves in background
-      }
-
-      setPipelineStep("idle");
-      router.push("/creative/brief");
+      const data = await res.json();
+      setGeneratedImages(
+        data.images.map((img: { url: string; sourceUrl?: string }, i: number) => ({
+          sceneId: scenes[i]?.id || `scene_${i}`,
+          url: img.url,
+          sourceUrl: img.sourceUrl,
+        }))
+      );
     } catch (err) {
       setError((err as Error).message);
-      setPipelineStep("error", (err as Error).message);
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
-  }, [productInput, logoFile, productImage, colorInputs, competitorName, setPipelineStep, setProductInput, setBrandKit, setBrief, router]);
+  }, [scenes, productInput, brandKit, brief, productImage, productImageUrl]);
 
   return (
-    <main className="flex-1 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl space-y-8">
+    <main className="flex-1 overflow-y-auto">
+      <div className="max-w-4xl mx-auto p-6 space-y-6">
         {/* Header */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-sm font-medium">
-            <Zap className="w-4 h-4" />
-            AI Creative Director
+        <div>
+          <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-medium mb-2">
+            <Palette className="w-3 h-3" /> Creative Hub
           </div>
-          <h1 className="text-4xl font-bold tracking-tight">
-            Mykos AI
-          </h1>
-          <p className="text-muted-foreground text-lg max-w-md mx-auto">
-            Enter your product — the AI handles the creative strategy, ad generation, and everything in between.
+          <h1 className="text-2xl font-bold">Scene Builder</h1>
+          <p className="text-muted-foreground text-sm">
+            Build scenes with creative control. Each scene becomes a poster or video clip.
+            {productInput.name && (
+              <span className="text-primary ml-1">Brand: {productInput.name}</span>
+            )}
           </p>
-          {hasPreviousSession && (
-            <div className="flex items-center gap-3 justify-center">
-              <button
-                onClick={() => router.push("/campaigns")}
-                className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
-              >
-                My Campaigns
-              </button>
-              <span className="text-muted-foreground/30">·</span>
-              <button
-                onClick={() => {
-                  reset();
-                  setProductImage(null);
-                  setLogoFile(null);
-                  setColorInputs(["#a855f7", "#7c3aed", "#1e1b4b"]);
-                  setCompetitorName("");
-                  setProductUrl("");
-                  setError("");
-                }}
-                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-red-400 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Start Fresh
-              </button>
-            </div>
-          )}
         </div>
 
-        {/* Product Input Card */}
-        <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
-          <div className="space-y-4">
-            {/* Product Name */}
+        {/* Product & Logo Upload */}
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Assets</h3>
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-                Product Name *
-              </label>
-              <input
-                type="text"
-                value={productInput.name}
-                onChange={(e) => setProductInput({ name: e.target.value })}
-                placeholder="e.g., Nike Air Max, Notion, Rolex Submariner"
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-                One-Line Description *
-              </label>
-              <textarea
-                value={productInput.description}
-                onChange={(e) => setProductInput({ description: e.target.value })}
-                placeholder="e.g., Iconic running shoe with revolutionary air cushioning technology"
-                rows={2}
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              />
-            </div>
-
-            {/* Product Image Upload */}
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-                Product Image (optional)
-              </label>
-              <label className="flex items-center gap-3 bg-secondary border border-dashed border-border rounded-xl px-4 py-3 cursor-pointer hover:border-primary/50">
-                <Upload className="w-5 h-5 text-muted-foreground" />
-                <span className="text-muted-foreground text-sm">
-                  {productImage ? productImage.name : "Drop an image or click to upload"}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => setProductImage(e.target.files?.[0] || null)}
-                />
+              <label className="block text-xs text-muted-foreground mb-1">Product Image</label>
+              <label className="flex items-center gap-2 bg-secondary border border-dashed border-border rounded-xl px-3 py-2 cursor-pointer hover:border-primary/50 text-sm">
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                <span className="text-muted-foreground truncate">{productImage ? productImage.name : "Upload product photo"}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => setProductImage(e.target.files?.[0] || null)} />
               </label>
             </div>
-
-            {/* Product URL (optional) */}
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-                Product URL (optional)
+              <label className="block text-xs text-muted-foreground mb-1">Logo</label>
+              <label className="flex items-center gap-2 bg-secondary border border-dashed border-border rounded-xl px-3 py-2 cursor-pointer hover:border-primary/50 text-sm">
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                <span className="text-muted-foreground truncate">{logoFile ? logoFile.name : "Upload logo"}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={productUrl}
-                  onChange={(e) => setProductUrl(e.target.value)}
-                  placeholder="https://example.com/product"
-                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {productUrl && (
-                  <button
-                    onClick={async () => {
-                      setScrapingUrl(true);
-                      try {
-                        const res = await fetch("/api/scrape-url", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ url: productUrl }),
-                        });
-                        if (res.ok) {
-                          const data = await res.json();
-                          if (data.name) setProductInput({ name: data.name });
-                          if (data.description) setProductInput({ description: data.description });
-                        }
-                      } catch { /* ignore */ } finally { setScrapingUrl(false); }
-                    }}
-                    disabled={scrapingUrl}
-                    className="bg-secondary hover:bg-secondary/80 border border-border rounded-xl px-4 py-3 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    {scrapingUrl ? "..." : "Auto-fill"}
-                  </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scenes */}
+        <div className="space-y-3">
+          {scenes.map((scene, idx) => {
+            const isExpanded = expandedScene === scene.id;
+            const generatedImg = generatedImages.find((g) => g.sceneId === scene.id);
+
+            return (
+              <div key={scene.id} className="bg-card border border-border rounded-2xl overflow-hidden">
+                {/* Scene Header */}
+                <button
+                  onClick={() => setExpandedScene(isExpanded ? null : scene.id)}
+                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-secondary/30"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-mono">
+                      S{idx + 1}
+                    </span>
+                    <span className="text-sm font-medium">
+                      {scene.mood} · {scene.cameraAngle.split(",")[0]}
+                    </span>
+                    {generatedImg && (
+                      <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full">Generated</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {scenes.length > 1 && (
+                      <button onClick={(e) => { e.stopPropagation(); removeScene(scene.id); }}
+                        className="text-muted-foreground hover:text-red-400 p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+                </button>
+
+                {/* Scene Body */}
+                {isExpanded && (
+                  <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Mood */}
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1">Mood</label>
+                        <select value={scene.mood} onChange={(e) => updateScene(scene.id, { mood: e.target.value })}
+                          className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                          {MOODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Camera Angle */}
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1">Camera Angle</label>
+                        <select value={scene.cameraAngle} onChange={(e) => updateScene(scene.id, { cameraAngle: e.target.value })}
+                          className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                          {CAMERA_ANGLES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Lighting */}
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1">Lighting</label>
+                        <select value={scene.lighting} onChange={(e) => updateScene(scene.id, { lighting: e.target.value })}
+                          className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                          {LIGHTING_PRESETS.map((l) => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Color Grade */}
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1">Color Grade</label>
+                        <select value={scene.colorGrade} onChange={(e) => updateScene(scene.id, { colorGrade: e.target.value })}
+                          className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                          {COLOR_GRADES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Setting */}
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Setting / Environment</label>
+                      <textarea value={scene.setting} onChange={(e) => updateScene(scene.id, { setting: e.target.value })}
+                        placeholder="e.g., Modern gym with floor-to-ceiling windows, polished concrete floors, morning light"
+                        rows={2} className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none" />
+                    </div>
+
+                    {/* Character Action */}
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Character / Subject Action</label>
+                      <textarea value={scene.characterAction} onChange={(e) => updateScene(scene.id, { characterAction: e.target.value })}
+                        placeholder="e.g., Athletic man holds protein shaker at chest height, looking at camera with confident expression"
+                        rows={2} className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none" />
+                    </div>
+
+                    {/* Product Placement */}
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Product Placement</label>
+                      <textarea value={scene.productPlacement} onChange={(e) => updateScene(scene.id, { productPlacement: e.target.value })}
+                        placeholder="e.g., Product held in right hand, label facing camera, centered in frame"
+                        rows={1} className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none" />
+                    </div>
+
+                    {/* Generated Image Preview */}
+                    {generatedImg && (
+                      <div className="rounded-xl overflow-hidden border border-border">
+                        <img src={generatedImg.url} alt={`Scene ${idx + 1}`} className="w-full aspect-video object-cover" />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
+            );
+          })}
 
-            {/* Competitor (optional) */}
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-                Main Competitor (optional)
-              </label>
-              <input
-                type="text"
-                value={competitorName}
-                onChange={(e) => setCompetitorName(e.target.value)}
-                placeholder="e.g., ON Running, Asana, Omega"
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-          </div>
-
-          {/* Brand Kit (Collapsible) */}
-          <div className="border border-border rounded-xl overflow-hidden">
-            <button
-              onClick={() => setShowBrandKit(!showBrandKit)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-secondary/50 hover:bg-secondary"
-            >
-              <div className="flex items-center gap-2">
-                <Palette className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">Brand Kit (optional)</span>
-              </div>
-              {showBrandKit ? (
-                <ChevronUp className="w-4 h-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-muted-foreground" />
-              )}
-            </button>
-
-            {showBrandKit && (
-              <div className="p-4 space-y-4 border-t border-border">
-                {/* Logo Upload */}
-                <div>
-                  <label className="block text-sm text-muted-foreground mb-1.5">Logo</label>
-                  <label className="flex items-center gap-3 bg-secondary border border-dashed border-border rounded-xl px-4 py-3 cursor-pointer hover:border-primary/50">
-                    <Upload className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-muted-foreground text-sm">
-                      {logoFile ? logoFile.name : "Upload logo (PNG, SVG)"}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
-                    />
-                  </label>
-                </div>
-
-                {/* Colors */}
-                <div>
-                  <label className="block text-sm text-muted-foreground mb-1.5">
-                    Brand Colors
-                  </label>
-                  <div className="flex gap-3">
-                    {colorInputs.map((color, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={color}
-                          onChange={(e) => {
-                            const updated = [...colorInputs];
-                            updated[i] = e.target.value;
-                            setColorInputs(updated);
-                          }}
-                          className="w-10 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
-                        />
-                        <input
-                          type="text"
-                          value={color}
-                          onChange={(e) => {
-                            const updated = [...colorInputs];
-                            updated[i] = e.target.value;
-                            setColorInputs(updated);
-                          }}
-                          className="w-24 bg-secondary border border-border rounded-lg px-2 py-1 text-xs font-mono text-muted-foreground"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Fonts */}
-                <div>
-                  <label className="block text-sm text-muted-foreground mb-1.5">
-                    Font Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Inter, Helvetica Neue"
-                    onChange={(e) =>
-                      setBrandKit({ fonts: e.target.value ? [e.target.value] : [] })
-                    }
-                    className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-semibold py-4 rounded-xl flex items-center justify-center gap-2 text-lg"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                AI is analyzing your product...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5" />
-                AI Fill Brief
-              </>
-            )}
+          {/* Add Scene */}
+          <button onClick={addScene}
+            className="w-full border border-dashed border-border rounded-2xl py-3 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30">
+            <Plus className="w-4 h-4" /> Add Scene
           </button>
         </div>
 
-        {/* Example Products */}
-        <div className="text-center">
-          <p className="text-muted-foreground text-sm mb-3">Try an example:</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {[
-              { name: "Nike Air Max", desc: "Iconic running shoe with air cushioning" },
-              { name: "Notion", desc: "All-in-one workspace for notes and projects" },
-              { name: "Rolex Submariner", desc: "Luxury dive watch" },
-              { name: "Stripe", desc: "Payment infrastructure for the internet" },
-              { name: "Chanel No. 5", desc: "Iconic luxury perfume" },
-            ].map((ex) => (
-              <button
-                key={ex.name}
-                onClick={() => setProductInput({ name: ex.name, description: ex.desc })}
-                className="bg-secondary hover:bg-secondary/80 border border-border rounded-full px-4 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                {ex.name}
-              </button>
-            ))}
+        {/* Error */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>
+        )}
+
+        {/* Generate Button */}
+        <button onClick={generateSceneImages} disabled={generating}
+          className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-semibold py-4 rounded-xl flex items-center justify-center gap-2 text-lg">
+          {generating ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating scenes...</>
+            : <><Sparkles className="w-5 h-5" /> Generate Scene Images</>}
+        </button>
+
+        {/* Actions after generation */}
+        {generatedImages.length > 0 && !generating && (
+          <div className="flex gap-3">
+            <button onClick={() => router.push("/creative/poster")}
+              className="flex-1 bg-secondary hover:bg-secondary/80 text-foreground font-medium py-3 rounded-xl flex items-center justify-center gap-2">
+              <ImageIcon className="w-4 h-4" /> Create Poster
+            </button>
+            <button onClick={() => router.push("/creative/video")}
+              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-xl flex items-center justify-center gap-2">
+              <Eye className="w-4 h-4" /> Create Video
+            </button>
           </div>
-        </div>
+        )}
       </div>
     </main>
   );
