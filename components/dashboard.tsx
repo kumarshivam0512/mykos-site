@@ -12,6 +12,9 @@ import {
   ArrowRight,
   Zap,
   Clock,
+  Building2,
+  Palette,
+  TrendingUp,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -30,36 +33,28 @@ export default function DashboardPage() {
 
   const modules = [
     {
-      title: "Creative Studio",
-      description: "AI Creative Director — generate briefs, images, and video ads from a product description",
-      icon: <Sparkles className="w-6 h-6" />,
+      title: "Brand Hub",
+      description: "Set up your brand profile, audience personas, competitor analysis, and platform strategies",
+      icon: <Building2 className="w-6 h-6" />,
+      href: "/brand",
+      color: "bg-blue-500/10 text-blue-400",
+      status: brief ? `${productInput.name} active` : "Set up brand",
+    },
+    {
+      title: "Creative Hub",
+      description: "Build scenes, generate posters and video ads with AI — full creative control",
+      icon: <Palette className="w-6 h-6" />,
       href: "/creative",
       color: "bg-purple-500/10 text-purple-400",
-      status: "Active",
+      status: "Scene Builder",
     },
     {
-      title: "Customer Intelligence",
-      description: "Deep audience analysis — buyer personas, platform strategy, competitor differentiation",
-      icon: <Target className="w-6 h-6" />,
-      href: brief ? "/creative/audience" : "/creative",
-      color: "bg-blue-500/10 text-blue-400",
-      status: brief ? "Active" : "Generate a brief first",
-    },
-    {
-      title: "Campaign Library",
-      description: "Browse, load, and manage all your saved creative campaigns",
-      icon: <FolderOpen className="w-6 h-6" />,
-      href: "/campaigns",
+      title: "Performance Hub",
+      description: "Track ad performance, optimize budgets, manage campaigns, get AI recommendations",
+      icon: <TrendingUp className="w-6 h-6" />,
+      href: "/performance",
       color: "bg-green-500/10 text-green-400",
       status: `${recentCampaigns.length} campaigns`,
-    },
-    {
-      title: "Analytics",
-      description: "Track ad performance, budget optimization, multi-touch attribution",
-      icon: <BarChart3 className="w-6 h-6" />,
-      href: "/analytics",
-      color: "bg-amber-500/10 text-amber-400",
-      status: "Coming soon",
     },
   ];
 
@@ -83,14 +78,14 @@ export default function DashboardPage() {
             <div>
               <h2 className="font-semibold text-lg">Get Started</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Enter a product name and let the AI Creative Director build your campaign strategy.
+                Set up your brand and let AI analyze your audience, competitors, and platform strategies.
               </p>
             </div>
             <button
-              onClick={() => router.push("/creative")}
+              onClick={() => router.push("/brand")}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6 py-3 rounded-xl flex items-center gap-2 shrink-0"
             >
-              <Sparkles className="w-4 h-4" /> New Campaign
+              <Building2 className="w-4 h-4" /> Set Up Brand
             </button>
           </div>
         )}
@@ -107,10 +102,10 @@ export default function DashboardPage() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => router.push("/creative/brief")}
+                onClick={() => router.push("/brand/audience")}
                 className="bg-secondary hover:bg-secondary/80 text-foreground px-4 py-2 rounded-xl text-sm"
               >
-                View Brief
+                Brand Intel
               </button>
               <button
                 onClick={() => router.push("/creative/generate")}

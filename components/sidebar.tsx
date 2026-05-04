@@ -17,6 +17,14 @@ import {
   Zap,
   LogOut,
   LogIn,
+  Building2,
+  Image,
+  UserCircle,
+  Swords,
+  Globe,
+  Palette,
+  Video,
+  TrendingUp,
 } from "lucide-react";
 
 interface NavItem {
@@ -29,18 +37,37 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/", icon: <Home className="w-5 h-5" /> },
   {
-    label: "Creative Studio",
-    href: "/creative",
-    icon: <Sparkles className="w-5 h-5" />,
+    label: "Brand Hub",
+    href: "/brand",
+    icon: <Building2 className="w-5 h-5" />,
     children: [
-      { label: "New Campaign", href: "/creative" },
-      { label: "Brief Editor", href: "/creative/brief" },
-      { label: "Audience Intel", href: "/creative/audience" },
-      { label: "Generate Ad", href: "/creative/generate" },
+      { label: "Brand Setup", href: "/brand" },
+      { label: "Audience Intel", href: "/brand/audience" },
+      { label: "Competitors", href: "/brand/competitors" },
+      { label: "Platform Strategy", href: "/brand/platforms" },
     ],
   },
-  { label: "Campaigns", href: "/campaigns", icon: <FolderOpen className="w-5 h-5" /> },
-  { label: "Analytics", href: "/analytics", icon: <BarChart3 className="w-5 h-5" /> },
+  {
+    label: "Creative Hub",
+    href: "/creative",
+    icon: <Palette className="w-5 h-5" />,
+    children: [
+      { label: "Scene Builder", href: "/creative" },
+      { label: "Poster Studio", href: "/creative/poster" },
+      { label: "Video Studio", href: "/creative/video" },
+      { label: "Character Library", href: "/creative/characters" },
+    ],
+  },
+  {
+    label: "Performance Hub",
+    href: "/performance",
+    icon: <TrendingUp className="w-5 h-5" />,
+    children: [
+      { label: "Analytics", href: "/performance/analytics" },
+      { label: "Campaigns", href: "/performance/campaigns" },
+      { label: "AI Recommendations", href: "/performance/recommendations" },
+    ],
+  },
 ];
 
 export default function Sidebar() {
