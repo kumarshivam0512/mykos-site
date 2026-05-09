@@ -102,10 +102,8 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
   // Concatenate clips with crossfade transitions
   let currentVideo: string;
   const xfadeDuration = 0.8;
-  // For AI video clips, each is fixed 5s regardless of brief durations
-  const actualDurations = (videoClips && videoClips.length > 0)
-    ? clipPaths.map(() => 5)
-    : durations;
+  // Use the actual durations passed from the caller — these match what the user requested
+  const actualDurations = durations;
 
   if (clipPaths.length === 1) {
     currentVideo = clipPaths[0];

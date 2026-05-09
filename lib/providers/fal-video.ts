@@ -1,5 +1,5 @@
 import type { Scene, CameraSettings, AdFormat } from "@/lib/types";
-import { buildVideoPrompt } from "@/lib/prompts/prompt-engine";
+import { buildVideoPrompt, type RealismSettings } from "@/lib/prompts/prompt-engine";
 
 // ─── Video Model Tiers (user-selectable) ─────────────────────────
 export type VideoModel =
@@ -33,10 +33,11 @@ export async function generateVideoClip(
   cameraSettings?: CameraSettings,
   adFormat?: AdFormat,
   sceneBackdrop?: string,
-  characterSheet?: string
+  characterSheet?: string,
+  realism?: RealismSettings
 ): Promise<Buffer> {
   const resolvedModel = resolveModel(model);
-  const prompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
+  const prompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
 
   console.log(`[Video] Model: ${resolvedModel}, Duration: ${duration}s, Prompt length: ${prompt.length}`);
 
@@ -93,7 +94,7 @@ async function generateViaHiggsfield(
     body: JSON.stringify({
       prompt,
       image_url: imageUrl,
-      duration: Math.min(duration, 10),
+      duration: Math.min(Math.max(duration, 1), 12), // Higgsfield supports 1-12s per shot
       aspect_ratio: aspectRatio,
       enhance_prompt: false,  // Determinism — don't let Higgsfield rewrite our prompt
       motion_strength: 0.6,  // 0.5-0.7 for product/realism; higher = more drift risk

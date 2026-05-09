@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateVideoClip, type VideoModel } from "@/lib/providers/fal-video";
 import type { Scene, CameraSettings, AdFormat } from "@/lib/types";
+import type { RealismSettings } from "@/lib/prompts/prompt-engine";
 import path from "path";
 import fs from "fs/promises";
 
@@ -23,6 +24,8 @@ export async function POST(req: NextRequest) {
       sourceUrls,
       sceneBackdrop,
       characterSheet,
+      realism,
+      heroFrameIdx,
     } = body as {
       images: string[];
       scenes: Scene[];
@@ -37,6 +40,8 @@ export async function POST(req: NextRequest) {
       sourceUrls?: string[];
       sceneBackdrop?: string;
       characterSheet?: string;
+      realism?: RealismSettings;
+      heroFrameIdx?: number | null;
     };
 
     if (!images?.length || !scenes?.length) {
@@ -57,14 +62,34 @@ export async function POST(req: NextRequest) {
 
     const count = testMode ? 1 : Math.min(images.length, scenes.length);
     const clipPaths: string[] = [];
-    const clipDuration = Math.min(duration, 10);
+    const clipDuration = Math.min(duration, 12); // Higgsfield supports 1-12s
+
+    // Hero Frame Chaining: resolve the hero frame's image URL once
+    // When hero frame is set, ALL clips use this image as their source for i2v,
+    // ensuring the same character face appears across all video clips
+    let heroImageUrl: string | null = null;
+    if (heroFrameIdx != null && heroFrameIdx >= 0 && heroFrameIdx < images.length) {
+      if (sourceUrls?.[heroFrameIdx]) {
+        heroImageUrl = sourceUrls[heroFrameIdx];
+      } else {
+        const heroPath = path.join(process.cwd(), "public", images[heroFrameIdx]);
+        const heroBuffer = await fs.readFile(heroPath);
+        const heroB64 = heroBuffer.toString("base64");
+        const heroExt = images[heroFrameIdx].endsWith(".png") ? "png" : "jpeg";
+        heroImageUrl = `data:image/${heroExt};base64,${heroB64}`;
+      }
+      console.log(`[VideoClips] Hero Frame Chaining: using scene ${heroFrameIdx + 1} as identity anchor`);
+    }
 
     for (let i = 0; i < count; i++) {
       console.log(`[VideoClips] Generating scene ${i + 1}/${count} with model=${model}`);
 
-      // Use public source URL if available (from Higgsfield), otherwise base64
+      // Use hero frame image if set (character consistency), otherwise scene's own image
       let imageUrl: string;
-      if (sourceUrls?.[i]) {
+      if (heroImageUrl) {
+        imageUrl = heroImageUrl;
+        console.log(`[VideoClips] Using hero frame (scene ${(heroFrameIdx ?? 0) + 1}) for character consistency`);
+      } else if (sourceUrls?.[i]) {
         imageUrl = sourceUrls[i];
         console.log(`[VideoClips] Using source URL: ${imageUrl.substring(0, 80)}...`);
       } else {
@@ -79,14 +104,15 @@ export async function POST(req: NextRequest) {
       const videoBuffer = await generateVideoClip(
         imageUrl,
         scenes[i],
-        clipDuration,
+        Math.min(scenes[i].duration || clipDuration, 12), // per-scene duration, max 12s
         model,
         aspectRatio,
         hasProductImage,
         cameraSettings,
         adFormat,
         sceneBackdrop,
-        characterSheet
+        characterSheet,
+        realism
       );
 
       const clipPath = path.join(OUTPUT_DIR, `ai_clip_${i}.mp4`);

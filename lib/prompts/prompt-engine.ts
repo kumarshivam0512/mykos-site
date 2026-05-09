@@ -1,5 +1,73 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
 
+// ─── Ultra-Realism Settings ─────────────────────────────────────
+// Based on cinematic production techniques (Steven Wommack's 4-step workflow,
+// robotbuilders.net guide, Dreamina best practices):
+// Real cameras have imperfections. Real scenes have atmospheric effects.
+// Real skin has pores. Real surfaces have wear. Enabling these cues
+// breaks the "AI look" and pushes output toward photorealism.
+
+export interface RealismSettings {
+  filmGrain: boolean;
+  lensImperfections: boolean;
+  depthOfField: boolean;
+  atmosphericEffects: boolean;
+  skinDetail: boolean;
+  environmentalDetail: boolean;
+  naturalMotion: boolean;
+  imperfectComposition: boolean;
+}
+
+function buildRealismBooster(r: RealismSettings): string {
+  const cues: string[] = [];
+
+  if (r.filmGrain) {
+    cues.push("subtle 35mm film grain texture, slight color noise in shadows");
+  }
+  if (r.lensImperfections) {
+    cues.push("mild chromatic aberration on edges, natural vignetting, subtle lens flare from light sources");
+  }
+  if (r.depthOfField) {
+    cues.push("shallow depth of field with natural bokeh circles on background, foreground elements slightly soft");
+  }
+  if (r.atmosphericEffects) {
+    cues.push("visible fine dust particles in light beams, faint atmospheric haze, volumetric light rays");
+  }
+  if (r.skinDetail) {
+    cues.push("visible skin pores, fine facial hair, natural skin blemishes and uneven tone, fabric weave texture visible");
+  }
+  if (r.environmentalDetail) {
+    cues.push("surface micro-scratches, fingerprints on glass, water stains, natural patina and wear on materials, scuff marks on floor");
+  }
+  if (r.naturalMotion) {
+    cues.push("hair wisps floating, fabric edge settling, subtle breathing motion, ambient environmental micro-movement");
+  }
+  if (r.imperfectComposition) {
+    cues.push("composed with rule-of-thirds tension, slightly off-center framing, natural asymmetry");
+  }
+
+  return cues.join(", ");
+}
+
+function buildRealismNegatives(r: RealismSettings): string {
+  const negs: string[] = [];
+
+  if (r.skinDetail) {
+    negs.push("no plastic skin, no airbrushed complexion, no unnaturally smooth faces");
+  }
+  if (r.depthOfField) {
+    negs.push("no uniformly sharp everything-in-focus look");
+  }
+  if (r.environmentalDetail) {
+    negs.push("no brand-new pristine surfaces, no unrealistically clean environments");
+  }
+  if (r.filmGrain || r.lensImperfections) {
+    negs.push("no digitally perfect noise-free rendering");
+  }
+
+  return negs.join(", ");
+}
+
 // ─── Production-Grade Prompt Engine ──────────────────────────────
 // Aligned with Higgsfield Ad Prompting Playbook:
 // - Image prompt owns LOOK (composition, subject, lighting, materials, mood)
@@ -39,7 +107,8 @@ export function buildImagePrompt(
   adFormat?: AdFormat,
   hasProductImage?: boolean,
   sceneBackdrop?: string,
-  characterSheet?: string
+  characterSheet?: string,
+  realism?: RealismSettings
 ): string {
   const lines: string[] = [];
   const isAnimated = adFormat === "animated_explainer";
@@ -90,8 +159,16 @@ export function buildImagePrompt(
     lines.push("hyper-detailed textures, photorealistic, 4K, ultra-sharp");
   }
 
+  // 9.5. Ultra-realism boosters (placed AFTER quality, BEFORE negatives — high weight zone)
+  if (realism) {
+    const booster = buildRealismBooster(realism);
+    if (booster) lines.push(booster);
+  }
+
   // 10. Negative
-  lines.push(`Avoid: ${NEGATIVE_BLOCK}`);
+  const extraNegs = realism ? buildRealismNegatives(realism) : "";
+  const fullNeg = extraNegs ? `${NEGATIVE_BLOCK}, ${extraNegs}` : NEGATIVE_BLOCK;
+  lines.push(`Avoid: ${fullNeg}`);
 
   return lines.join(", ");
 }
@@ -166,7 +243,8 @@ export function buildVideoPrompt(
   adFormat?: AdFormat,
   hasProductImage?: boolean,
   sceneBackdrop?: string,
-  characterSheet?: string
+  characterSheet?: string,
+  realism?: RealismSettings
 ): string {
   const namedMove = getNamedMove(scene.motion || "push in");
   const isStatic = namedMove === "camera_fixed";
@@ -196,6 +274,21 @@ export function buildVideoPrompt(
   // Product preservation (keep minimal in video prompt)
   if (hasProductImage) {
     lines.push("Product: must remain sharp, unwarped, and recognizable in every frame");
+  }
+
+  // Ultra-realism video cues
+  if (realism) {
+    const videoCues: string[] = [];
+    if (realism.naturalMotion) {
+      videoCues.push("Add subtle natural micro-motion: hair wisps floating, fabric edges settling, ambient dust particles drifting");
+    }
+    if (realism.atmosphericEffects) {
+      videoCues.push("Maintain atmospheric haze and volumetric light throughout motion");
+    }
+    if (realism.filmGrain) {
+      videoCues.push("Consistent film grain texture across all frames");
+    }
+    if (videoCues.length) lines.push(videoCues.join(". "));
   }
 
   // Negatives

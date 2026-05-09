@@ -56,6 +56,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Poster Studio", href: "/creative/poster" },
       { label: "Video Studio", href: "/creative/video" },
       { label: "Character Library", href: "/creative/characters" },
+      { label: "Location Library", href: "/creative/locations" },
     ],
   },
   {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateImageHiggsfield } from "@/lib/providers/higgsfield-image";
 import { generateImageWithFallback } from "@/lib/providers/fallback";
-import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
+import { buildImagePrompt, type RealismSettings } from "@/lib/prompts/prompt-engine";
 import type { Scene, BrandKit } from "@/lib/types";
 import sharp from "sharp";
 import path from "path";
@@ -18,6 +18,7 @@ interface SceneInput {
   cameraAngle: string;
   lighting: string;
   colorGrade: string;
+  characterRefUrl?: string; // Face reference for IP-Adapter consistency
 }
 
 // Convert structured scene inputs into a Scene object for the prompt engine
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
       sceneBackdrop,
       characterSheet,
       hasProductImage = false,
+      realism,
+      productAngleUrls,
     } = body as {
       scenes: SceneInput[];
       productName: string;
@@ -57,6 +60,8 @@ export async function POST(req: NextRequest) {
       sceneBackdrop?: string;
       characterSheet?: string;
       hasProductImage?: boolean;
+      realism?: RealismSettings;
+      productAngleUrls?: string[];
     };
 
     if (!scenes?.length) {
@@ -82,6 +87,9 @@ export async function POST(req: NextRequest) {
       // Build the ad format from mood
       const adFormat = moodToAdFormat(sceneInput.mood);
 
+      // If multi-angle product images are provided, boost product preservation in prompt
+      const effectiveHasProductImage = hasProductImage || (productAngleUrls && productAngleUrls.length > 0);
+
       let buffer: Buffer;
       let sourceUrl: string | undefined;
 
@@ -90,9 +98,10 @@ export async function POST(req: NextRequest) {
           scene, brandKit, 1024, 576,
           { focalLength: "85mm", aperture: "f/2.0", colorGrade: sceneInput.colorGrade },
           adFormat,
-          hasProductImage,
+          effectiveHasProductImage,
           effectiveBackdrop,
-          characterSheet
+          characterSheet,
+          realism
         );
         buffer = result.buffer;
         sourceUrl = result.sourceUrl;
@@ -102,15 +111,18 @@ export async function POST(req: NextRequest) {
           Date.now() + i,
           { focalLength: "85mm", aperture: "f/2.0", colorGrade: sceneInput.colorGrade },
           adFormat,
-          hasProductImage,
+          effectiveHasProductImage,
           effectiveBackdrop,
-          characterSheet
+          characterSheet,
+          realism
         );
       }
 
       // Save to disk
       const outputPath = path.join(OUTPUT_DIR, `scene_${i}.png`);
-      await sharp(buffer).resize(1024, 576, { fit: "cover" }).png().toFile(outputPath);
+      const finalBuffer = await sharp(buffer).resize(1024, 576, { fit: "cover" }).png().toBuffer();
+
+      await fs.writeFile(outputPath, finalBuffer);
 
       images.push({
         url: `/output/scene_${i}.png`,

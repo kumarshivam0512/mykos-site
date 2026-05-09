@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAdStore } from "@/store/use-ad-store";
+import type { Character } from "@/lib/db/characters";
+import type { Location } from "@/lib/db/locations";
 import {
   Palette,
   Plus,
@@ -14,7 +16,56 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  UserCircle,
+  MapPin,
+  X,
+  Camera,
 } from "lucide-react";
+
+interface RealismSettings {
+  filmGrain: boolean;
+  lensImperfections: boolean; // chromatic aberration, vignette, subtle flare
+  depthOfField: boolean;       // shallow DOF with bokeh
+  atmosphericEffects: boolean; // dust particles, haze, light rays
+  skinDetail: boolean;         // pores, blemishes, fine hair
+  environmentalDetail: boolean; // scratches, wear, weathering on surfaces
+  naturalMotion: boolean;       // micro-movement hints: fabric settling, hair wisps
+  imperfectComposition: boolean; // slightly off-center, rule-of-thirds tension
+}
+
+const REALISM_DEFAULTS: RealismSettings = {
+  filmGrain: false,
+  lensImperfections: false,
+  depthOfField: true,
+  atmosphericEffects: false,
+  skinDetail: true,
+  environmentalDetail: false,
+  naturalMotion: false,
+  imperfectComposition: false,
+};
+
+const REALISM_PRESETS: Record<string, { label: string; desc: string; settings: RealismSettings }> = {
+  off: {
+    label: "Standard",
+    desc: "Clean AI-optimized output",
+    settings: { filmGrain: false, lensImperfections: false, depthOfField: false, atmosphericEffects: false, skinDetail: false, environmentalDetail: false, naturalMotion: false, imperfectComposition: false },
+  },
+  photo: {
+    label: "Photorealistic",
+    desc: "Depth of field + skin detail + natural surfaces",
+    settings: { filmGrain: false, lensImperfections: false, depthOfField: true, atmosphericEffects: false, skinDetail: true, environmentalDetail: true, naturalMotion: false, imperfectComposition: false },
+  },
+  cinematic: {
+    label: "Cinematic",
+    desc: "Film grain + lens effects + atmospheric haze",
+    settings: { filmGrain: true, lensImperfections: true, depthOfField: true, atmosphericEffects: true, skinDetail: true, environmentalDetail: true, naturalMotion: false, imperfectComposition: false },
+  },
+  raw: {
+    label: "Ultra Raw",
+    desc: "Maximum realism — all imperfections enabled",
+    settings: { filmGrain: true, lensImperfections: true, depthOfField: true, atmosphericEffects: true, skinDetail: true, environmentalDetail: true, naturalMotion: true, imperfectComposition: true },
+  },
+};
 
 interface SceneInput {
   id: string;
@@ -25,6 +76,7 @@ interface SceneInput {
   cameraAngle: string;
   lighting: string;
   colorGrade: string;
+  characterRefUrl?: string; // Face reference URL from Character Library
 }
 
 const MOODS = ["Aspirational", "Energetic", "Calm", "Luxurious", "Playful", "Gritty", "Professional", "Warm", "Dramatic", "Minimal"];
@@ -45,9 +97,133 @@ function createEmptyScene(): SceneInput {
   };
 }
 
+// ─── Helper: Convert library items to prompt-ready text ──────────
+function characterToSheet(c: Character): string {
+  return [
+    `${c.gender}, ${c.age} years old, ${c.ethnicity}, ${c.build}`,
+    c.face ? `Face: ${c.face}` : "",
+    c.hair ? `Hair: ${c.hair}` : "",
+    c.outfit ? `Outfit: ${c.outfit}` : "",
+    c.skinDetails ? `Skin: ${c.skinDetails}` : "",
+    c.expression ? `Expression: ${c.expression}` : "",
+    c.accessories ? `Accessories: ${c.accessories}` : "",
+  ].filter(Boolean).join(". ");
+}
+
+function locationToSheet(l: Location): string {
+  return [
+    `${l.type} location: ${l.setting}`,
+    l.timeOfDay ? `Time: ${l.timeOfDay}` : "",
+    l.lighting ? `Lighting: ${l.lighting}` : "",
+    l.surfaces ? `Surfaces: ${l.surfaces}` : "",
+    l.atmosphere ? `Atmosphere: ${l.atmosphere}` : "",
+    l.props ? `Props: ${l.props}` : "",
+    l.colorPalette ? `Colors: ${l.colorPalette}` : "",
+    l.weatherCondition ? `Weather: ${l.weatherCondition}` : "",
+  ].filter(Boolean).join(". ");
+}
+
+// ─── @ Mention Field Component ───────────────────────────────────
+interface MentionItem { id: string; name: string; sheet: string; refUrl?: string; }
+
+function MentionField({ value, onChange, placeholder, rows, mentionType, items, onMentionInsert }: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder: string;
+  rows: number;
+  mentionType: "character" | "location";
+  items: MentionItem[];
+  onMentionInsert?: (item: MentionItem) => void;
+}) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [filter, setFilter] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    onChange(val);
+
+    // Detect @ trigger
+    const cursorPos = e.target.selectionStart;
+    const textBefore = val.slice(0, cursorPos);
+    const atMatch = textBefore.match(/@(\w*)$/);
+
+    if (atMatch && items.length > 0) {
+      setShowDropdown(true);
+      setFilter(atMatch[1].toLowerCase());
+    } else {
+      setShowDropdown(false);
+    }
+  };
+
+  const insertMention = (item: MentionItem) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const cursorPos = textarea.selectionStart;
+    const textBefore = value.slice(0, cursorPos);
+    const textAfter = value.slice(cursorPos);
+
+    // Replace the @query with the full sheet
+    const atMatch = textBefore.match(/@(\w*)$/);
+    const prefix = atMatch ? textBefore.slice(0, atMatch.index!) : textBefore;
+    const newValue = `${prefix}[${item.name}] ${item.sheet}${textAfter}`;
+
+    onChange(newValue);
+    setShowDropdown(false);
+    if (onMentionInsert) onMentionInsert(item);
+
+    // Refocus
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = prefix.length + item.name.length + item.sheet.length + 3;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
+  const filtered = items.filter((item) =>
+    filter === "" || item.name.toLowerCase().includes(filter)
+  );
+
+  const icon = mentionType === "character"
+    ? <UserCircle className="w-3.5 h-3.5 text-primary" />
+    : <MapPin className="w-3.5 h-3.5 text-primary" />;
+
+  return (
+    <div className="relative">
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleChange}
+        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+      />
+      {showDropdown && filtered.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map((item) => (
+            <button
+              key={item.id}
+              onMouseDown={(e) => { e.preventDefault(); insertMention(item); }}
+              className="w-full text-left px-3 py-2 hover:bg-secondary/80 flex items-center gap-2 border-b border-border/50 last:border-0"
+            >
+              {icon}
+              <div>
+                <div className="text-sm font-medium">{item.name}</div>
+                <div className="text-[10px] text-muted-foreground truncate max-w-[400px]">{item.sheet}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SceneBuilderPage() {
   const router = useRouter();
-  const { productInput, brandKit, brief } = useAdStore();
+  const { productInput, brandKit, brief, setAssets } = useAdStore();
 
   const [scenes, setScenes] = useState<SceneInput[]>([createEmptyScene()]);
   const [expandedScene, setExpandedScene] = useState<string | null>(scenes[0]?.id);
@@ -57,6 +233,33 @@ export default function SceneBuilderPage() {
   const [productImage, setProductImage] = useState<File | null>(null);
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [realismPreset, setRealismPreset] = useState<string>("photo");
+  const [realism, setRealism] = useState<RealismSettings>(REALISM_DEFAULTS);
+  const [showRealismAdvanced, setShowRealismAdvanced] = useState(false);
+
+  // Library data for @ mentions
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  // Multi-angle product images
+  const [productAngles, setProductAngles] = useState<{ file: File; preview: string; label: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/characters").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setCharacters(d); }).catch(() => {});
+    fetch("/api/locations").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setLocations(d); }).catch(() => {});
+  }, []);
+
+  const addProductAngle = (file: File) => {
+    const preview = URL.createObjectURL(file);
+    const labels = ["front", "back", "side-left", "side-right", "top", "detail", "angle"];
+    const label = labels[productAngles.length] || `angle-${productAngles.length + 1}`;
+    setProductAngles([...productAngles, { file, preview, label }]);
+  };
+
+  const removeProductAngle = (idx: number) => {
+    URL.revokeObjectURL(productAngles[idx].preview);
+    setProductAngles(productAngles.filter((_, i) => i !== idx));
+  };
 
   const addScene = () => {
     const newScene = createEmptyScene();
@@ -96,6 +299,19 @@ export default function SceneBuilderPage() {
         }
       }
 
+      // Upload multi-angle product images
+      const angleUrls: string[] = [];
+      for (const angle of productAngles) {
+        const formData = new FormData();
+        formData.append("file", angle.file);
+        formData.append("type", `product_${angle.label}`);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (uploadRes.ok) {
+          const { url } = await uploadRes.json();
+          angleUrls.push(url);
+        }
+      }
+
       // Generate image for each scene using the scene-to-prompt API
       const res = await fetch("/api/scene-to-image", {
         method: "POST",
@@ -107,7 +323,9 @@ export default function SceneBuilderPage() {
           brandColors: brandKit.colors,
           sceneBackdrop: brief?.sceneBackdrop,
           characterSheet: brief?.characterSheet,
-          hasProductImage: !!productImageUrl || !!productImage,
+          hasProductImage: !!productImageUrl || !!productImage || productAngles.length > 0,
+          realism,
+          productAngleUrls: angleUrls.length > 0 ? angleUrls : undefined,
         }),
       });
 
@@ -117,19 +335,26 @@ export default function SceneBuilderPage() {
       }
 
       const data = await res.json();
-      setGeneratedImages(
-        data.images.map((img: { url: string; sourceUrl?: string }, i: number) => ({
-          sceneId: scenes[i]?.id || `scene_${i}`,
-          url: img.url,
-          sourceUrl: img.sourceUrl,
-        }))
-      );
+      const newImages = data.images.map((img: { url: string; sourceUrl?: string }, i: number) => ({
+        sceneId: scenes[i]?.id || `scene_${i}`,
+        url: img.url,
+        sourceUrl: img.sourceUrl,
+      }));
+      setGeneratedImages(newImages);
+
+      // Persist to global store so Poster/Video Studio can access them
+      setAssets({
+        images: newImages.map((g: { url: string }) => g.url),
+        sourceUrls: newImages.map((g: { sourceUrl?: string }) => g.sourceUrl).filter(Boolean) as string[],
+        realism: realism as unknown as Record<string, boolean>,
+        productAngleUrls: angleUrls.length > 0 ? angleUrls : undefined,
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setGenerating(false);
     }
-  }, [scenes, productInput, brandKit, brief, productImage, productImageUrl]);
+  }, [scenes, productInput, brandKit, brief, productImage, productImageUrl, realism, setAssets, productAngles]);
 
   return (
     <main className="flex-1 overflow-y-auto">
@@ -151,9 +376,37 @@ export default function SceneBuilderPage() {
         {/* Product & Logo Upload */}
         <div className="bg-card border border-border rounded-2xl p-5">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Assets</h3>
+
+          {/* Multi-angle product images */}
+          <div className="mb-4">
+            <label className="block text-xs text-muted-foreground mb-2 flex items-center gap-1">
+              <Camera className="w-3 h-3" /> Product Images (multiple angles for consistency)
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {productAngles.map((angle, i) => (
+                <div key={i} className="relative group">
+                  <img src={angle.preview} alt={angle.label} className="w-20 h-20 object-cover rounded-xl border border-border" />
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 rounded-b-xl">{angle.label}</div>
+                  <button onClick={() => removeProductAngle(i)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              <label className="w-20 h-20 border border-dashed border-border rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 text-muted-foreground">
+                <Plus className="w-4 h-4" />
+                <span className="text-[9px] mt-0.5">Add angle</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) addProductAngle(e.target.files[0]); e.target.value = ""; }} />
+              </label>
+            </div>
+            {productAngles.length === 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1">Upload front, back, side, and detail shots for better product reproduction</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Product Image</label>
+              <label className="block text-xs text-muted-foreground mb-1">Product Image (primary)</label>
               <label className="flex items-center gap-2 bg-secondary border border-dashed border-border rounded-xl px-3 py-2 cursor-pointer hover:border-primary/50 text-sm">
                 <Upload className="w-4 h-4 text-muted-foreground" />
                 <span className="text-muted-foreground truncate">{productImage ? productImage.name : "Upload product photo"}</span>
@@ -169,6 +422,67 @@ export default function SceneBuilderPage() {
               </label>
             </div>
           </div>
+        </div>
+
+        {/* Ultra-Realism Panel */}
+        <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" /> Ultra-Realism Settings
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Based on cinematic production techniques — add real-world imperfections to defeat the &ldquo;AI look&rdquo;
+              </p>
+            </div>
+          </div>
+
+          {/* Presets */}
+          <div className="flex gap-2">
+            {Object.entries(REALISM_PRESETS).map(([key, preset]) => (
+              <button key={key} onClick={() => { setRealismPreset(key); setRealism(preset.settings); }}
+                className={`flex-1 rounded-xl border px-3 py-2 text-left transition-colors ${
+                  realismPreset === key
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:border-primary/30"
+                }`}>
+                <div className="text-xs font-medium">{preset.label}</div>
+                <div className="text-[10px] text-muted-foreground">{preset.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Advanced toggle */}
+          <button onClick={() => setShowRealismAdvanced(!showRealismAdvanced)}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+            {showRealismAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            Fine-tune individual settings
+          </button>
+
+          {showRealismAdvanced && (
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { key: "filmGrain" as const, label: "Film Grain", tip: "Adds subtle 35mm grain texture — breaks digital perfection" },
+                { key: "lensImperfections" as const, label: "Lens Imperfections", tip: "Chromatic aberration, vignetting, subtle lens flare" },
+                { key: "depthOfField" as const, label: "Depth of Field", tip: "Shallow focus with natural bokeh — foreground/background blur" },
+                { key: "atmosphericEffects" as const, label: "Atmospheric Effects", tip: "Dust particles, volumetric haze, light rays, condensation" },
+                { key: "skinDetail" as const, label: "Skin & Texture Detail", tip: "Pores, fine hairs, blemishes, fabric weave — not plastic" },
+                { key: "environmentalDetail" as const, label: "Environmental Wear", tip: "Surface scratches, weathering, water stains, natural patina" },
+                { key: "naturalMotion" as const, label: "Natural Micro-Motion", tip: "Hair wisps, fabric settling, breathing — for video pipeline" },
+                { key: "imperfectComposition" as const, label: "Imperfect Framing", tip: "Slightly off-center, rule-of-thirds tension — not sterile" },
+              ]).map(({ key, label, tip }) => (
+                <label key={key} className="flex items-start gap-2.5 cursor-pointer group">
+                  <input type="checkbox" checked={realism[key]}
+                    onChange={(e) => { setRealism({ ...realism, [key]: e.target.checked }); setRealismPreset("custom"); }}
+                    className="mt-0.5 rounded accent-primary" />
+                  <div>
+                    <div className="text-xs font-medium group-hover:text-primary transition-colors">{label}</div>
+                    <div className="text-[10px] text-muted-foreground">{tip}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Scenes */}
@@ -249,18 +563,37 @@ export default function SceneBuilderPage() {
 
                     {/* Setting */}
                     <div>
-                      <label className="block text-xs text-muted-foreground mb-1">Setting / Environment</label>
-                      <textarea value={scene.setting} onChange={(e) => updateScene(scene.id, { setting: e.target.value })}
-                        placeholder="e.g., Modern gym with floor-to-ceiling windows, polished concrete floors, morning light"
-                        rows={2} className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none" />
+                      <label className="block text-xs text-muted-foreground mb-1">
+                        Setting / Environment
+                        {locations.length > 0 && <span className="text-primary/60 ml-1">— type <code className="bg-secondary px-1 rounded">@</code> to insert a saved location</span>}
+                      </label>
+                      <MentionField
+                        value={scene.setting}
+                        onChange={(val) => updateScene(scene.id, { setting: val })}
+                        placeholder="e.g., Modern gym with floor-to-ceiling windows... or type @ to pick a location"
+                        rows={2}
+                        mentionType="location"
+                        items={locations.map((l) => ({ id: l.id, name: l.name, sheet: locationToSheet(l) }))}
+                      />
                     </div>
 
                     {/* Character Action */}
                     <div>
-                      <label className="block text-xs text-muted-foreground mb-1">Character / Subject Action</label>
-                      <textarea value={scene.characterAction} onChange={(e) => updateScene(scene.id, { characterAction: e.target.value })}
-                        placeholder="e.g., Athletic man holds protein shaker at chest height, looking at camera with confident expression"
-                        rows={2} className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none" />
+                      <label className="block text-xs text-muted-foreground mb-1">
+                        Character / Subject Action
+                        {characters.length > 0 && <span className="text-primary/60 ml-1">— type <code className="bg-secondary px-1 rounded">@</code> to insert a saved character</span>}
+                      </label>
+                      <MentionField
+                        value={scene.characterAction}
+                        onChange={(val) => updateScene(scene.id, { characterAction: val })}
+                        placeholder="e.g., Athletic man holds protein shaker... or type @ to pick a character"
+                        rows={2}
+                        mentionType="character"
+                        items={characters.map((c) => ({ id: c.id, name: c.name, sheet: characterToSheet(c), refUrl: c.referenceImageUrl }))}
+                        onMentionInsert={(item) => {
+                          if (item.refUrl) updateScene(scene.id, { characterRefUrl: item.refUrl });
+                        }}
+                      />
                     </div>
 
                     {/* Product Placement */}

@@ -1,5 +1,5 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
-import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
+import { buildImagePrompt, type RealismSettings } from "@/lib/prompts/prompt-engine";
 
 const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt";
 
@@ -13,9 +13,10 @@ export async function generateImage(
   adFormat?: AdFormat,
   hasProductImage?: boolean,
   sceneBackdrop?: string,
-  characterSheet?: string
+  characterSheet?: string,
+  realism?: RealismSettings
 ): Promise<Buffer> {
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
   const params = new URLSearchParams({
     width: String(width),
     height: String(height),

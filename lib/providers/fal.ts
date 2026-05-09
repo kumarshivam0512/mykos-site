@@ -1,5 +1,5 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
-import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
+import { buildImagePrompt, type RealismSettings } from "@/lib/prompts/prompt-engine";
 
 export async function generateImageFal(
   scene: Scene,
@@ -10,12 +10,13 @@ export async function generateImageFal(
   adFormat?: AdFormat,
   hasProductImage?: boolean,
   sceneBackdrop?: string,
-  characterSheet?: string
+  characterSheet?: string,
+  realism?: RealismSettings
 ): Promise<Buffer> {
   const apiKey = process.env.FAL_KEY;
   if (!apiKey) throw new Error("FAL_KEY not configured");
 
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
 
   const res = await fetch("https://queue.fal.run/fal-ai/flux/schnell", {
     method: "POST",

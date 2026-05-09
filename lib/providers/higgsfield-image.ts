@@ -1,5 +1,5 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
-import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
+import { buildImagePrompt, type RealismSettings } from "@/lib/prompts/prompt-engine";
 
 export interface HiggsfieldImageResult {
   buffer: Buffer;
@@ -15,13 +15,14 @@ export async function generateImageHiggsfield(
   adFormat?: AdFormat,
   hasProductImage?: boolean,
   sceneBackdrop?: string,
-  characterSheet?: string
+  characterSheet?: string,
+  realism?: RealismSettings
 ): Promise<HiggsfieldImageResult> {
   const apiKey = process.env.HIGGSFIELD_KEY;
   const apiSecret = process.env.HIGGSFIELD_SECRET;
   if (!apiKey || !apiSecret) throw new Error("HIGGSFIELD_KEY and HIGGSFIELD_SECRET required");
 
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
   const aspectRatio = getAspectRatio(width, height);
 
   // Submit to Higgsfield Soul 2.0

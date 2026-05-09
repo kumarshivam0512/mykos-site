@@ -1,5 +1,5 @@
 import type { Scene, BrandKit, CameraSettings, AdFormat } from "@/lib/types";
-import { buildImagePrompt } from "@/lib/prompts/prompt-engine";
+import { buildImagePrompt, type RealismSettings } from "@/lib/prompts/prompt-engine";
 
 export async function generateImageReplicate(
   scene: Scene,
@@ -10,12 +10,13 @@ export async function generateImageReplicate(
   adFormat?: AdFormat,
   hasProductImage?: boolean,
   sceneBackdrop?: string,
-  characterSheet?: string
+  characterSheet?: string,
+  realism?: RealismSettings
 ): Promise<Buffer> {
   const apiToken = process.env.REPLICATE_API_TOKEN;
   if (!apiToken) throw new Error("REPLICATE_API_TOKEN not configured");
 
-  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet);
+  const prompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
 
   // Submit prediction
   const submitRes = await fetch("https://api.replicate.com/v1/predictions", {

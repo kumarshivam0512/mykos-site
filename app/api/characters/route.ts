@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { brandName, name, gender, age, ethnicity, build, face, hair, outfit, skinDetails, expression, accessories } = body;
+    const { brandName, name, gender, age, ethnicity, build, face, hair, outfit, skinDetails, expression, accessories, referenceImageUrl } = body;
 
     if (!brandName || !name || !gender) {
       return NextResponse.json({ error: "brandName, name, and gender are required" }, { status: 400 });
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       brandName, name, gender, age: age || 25, ethnicity: ethnicity || "",
       build: build || "", face: face || "", hair: hair || "", outfit: outfit || "",
       skinDetails: skinDetails || "", expression: expression || "neutral", accessories: accessories || "",
+      referenceImageUrl: referenceImageUrl || undefined,
     });
 
     return NextResponse.json(character);

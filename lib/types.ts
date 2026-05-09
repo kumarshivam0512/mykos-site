@@ -132,6 +132,9 @@ export interface GeneratedAssets {
   voiceoverUrl?: string;
   musicTrack?: string;
   videoUrl?: string;
+  // Persisted from Scene Builder so Video Studio can access them
+  realism?: Record<string, boolean>;
+  productAngleUrls?: string[];
 }
 
 // ─── Full Ad State ──────────────────────────────────────────

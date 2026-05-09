@@ -1,17 +1,8 @@
-import { getCampaignsContainer } from "./cosmos";
-import { CosmosClient, Container } from "@azure/cosmos";
+import { getAnalyticsContainer as getAnalyticsContainerFromCosmos } from "./cosmos";
+import type { Container } from "@azure/cosmos";
 
-let analyticsContainer: Container | null = null;
-
-function getAnalyticsContainer(): Container {
-  if (!analyticsContainer) {
-    const endpoint = process.env.COSMOS_ENDPOINT;
-    const key = process.env.COSMOS_KEY;
-    if (!endpoint || !key) throw new Error("COSMOS_ENDPOINT and COSMOS_KEY required");
-    const client = new CosmosClient({ endpoint, key });
-    analyticsContainer = client.database("mykos").container("analytics");
-  }
-  return analyticsContainer;
+async function getAnalyticsContainer(): Promise<Container> {
+  return getAnalyticsContainerFromCosmos();
 }
 
 export interface ChannelData {
@@ -36,7 +27,7 @@ export interface AnalyticsEntry {
 }
 
 export async function saveAnalytics(entry: Omit<AnalyticsEntry, "id" | "createdAt">): Promise<AnalyticsEntry> {
-  const container = getAnalyticsContainer();
+  const container = await getAnalyticsContainer();
   const doc: AnalyticsEntry = {
     ...entry,
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -47,7 +38,7 @@ export async function saveAnalytics(entry: Omit<AnalyticsEntry, "id" | "createdA
 }
 
 export async function listAnalytics(brandName?: string, limit = 50): Promise<AnalyticsEntry[]> {
-  const container = getAnalyticsContainer();
+  const container = await getAnalyticsContainer();
   const query = brandName
     ? { query: "SELECT * FROM c WHERE c.brandName = @brand ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit", parameters: [{ name: "@brand", value: brandName }, { name: "@limit", value: limit }] }
     : { query: "SELECT * FROM c ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit", parameters: [{ name: "@limit", value: limit }] };
@@ -56,6 +47,6 @@ export async function listAnalytics(brandName?: string, limit = 50): Promise<Ana
 }
 
 export async function deleteAnalyticsEntry(id: string, brandName: string): Promise<void> {
-  const container = getAnalyticsContainer();
+  const container = await getAnalyticsContainer();
   await container.item(id, brandName).delete();
 }

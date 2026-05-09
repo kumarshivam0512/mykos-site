@@ -11,6 +11,7 @@ import {
   Save,
   X,
   Copy,
+  Upload,
 } from "lucide-react";
 
 export default function CharacterLibraryPage() {
@@ -26,6 +27,8 @@ export default function CharacterLibraryPage() {
     name: "", gender: "Male", age: 28, ethnicity: "", build: "",
     face: "", hair: "", outfit: "", skinDetails: "", expression: "confident, natural", accessories: "",
   });
+  const [refImageFile, setRefImageFile] = useState<File | null>(null);
+  const [refImagePreview, setRefImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/characters")
@@ -39,16 +42,31 @@ export default function CharacterLibraryPage() {
     if (!form.name) return;
     setSaving(true);
     try {
+      // Upload reference image if provided
+      let referenceImageUrl: string | undefined;
+      if (refImageFile) {
+        const formData = new FormData();
+        formData.append("file", refImageFile);
+        formData.append("type", "char_ref");
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (uploadRes.ok) {
+          const { url } = await uploadRes.json();
+          referenceImageUrl = url;
+        }
+      }
+
       const res = await fetch("/api/characters", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, brandName: productInput.name || "General" }),
+        body: JSON.stringify({ ...form, brandName: productInput.name || "General", referenceImageUrl }),
       });
       if (res.ok) {
         const char = await res.json();
         setCharacters([char, ...characters]);
         setShowForm(false);
         setForm({ name: "", gender: "Male", age: 28, ethnicity: "", build: "", face: "", hair: "", outfit: "", skinDetails: "", expression: "confident, natural", accessories: "" });
+        setRefImageFile(null);
+        setRefImagePreview(null);
       }
     } catch { /* ignore */ }
     setSaving(false);
@@ -179,6 +197,33 @@ export default function CharacterLibraryPage() {
                 className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm" />
             </div>
 
+            {/* Reference Image for Face Consistency */}
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">
+                Reference Photo <span className="text-primary/60">(enables face-consistent generation across scenes)</span>
+              </label>
+              <div className="flex items-center gap-3">
+                {refImagePreview ? (
+                  <div className="relative">
+                    <img src={refImagePreview} alt="Reference" className="w-16 h-16 object-cover rounded-xl border border-border" />
+                    <button onClick={() => { setRefImageFile(null); setRefImagePreview(null); }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 bg-secondary border border-dashed border-border rounded-xl px-4 py-3 cursor-pointer hover:border-primary/50 text-sm flex-1">
+                    <Upload className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Upload a clear face photo (front-facing, good lighting)</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) { setRefImageFile(file); setRefImagePreview(URL.createObjectURL(file)); }
+                    }} />
+                  </label>
+                )}
+              </div>
+            </div>
+
             <button onClick={handleSave} disabled={saving || !form.name}
               className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -207,9 +252,13 @@ export default function CharacterLibraryPage() {
               <div key={char.id} className="bg-card border border-border rounded-2xl p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary text-lg font-bold shrink-0">
-                      {char.name.charAt(0)}
-                    </div>
+                    {char.referenceImageUrl ? (
+                      <img src={char.referenceImageUrl} alt={char.name} className="w-12 h-12 rounded-xl object-cover border border-border shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary text-lg font-bold shrink-0">
+                        {char.name.charAt(0)}
+                      </div>
+                    )}
                     <div>
                       <h3 className="font-semibold">{char.name}</h3>
                       <p className="text-sm text-muted-foreground">

@@ -13,7 +13,7 @@ export interface Campaign {
 }
 
 export async function saveCampaign(campaign: Omit<Campaign, "id" | "createdAt" | "updatedAt">): Promise<Campaign> {
-  const container = getCampaignsContainer();
+  const container = await getCampaignsContainer();
   const now = new Date().toISOString();
   const doc: Campaign = {
     ...campaign,
@@ -26,7 +26,7 @@ export async function saveCampaign(campaign: Omit<Campaign, "id" | "createdAt" |
 }
 
 export async function listCampaigns(limit = 50): Promise<Campaign[]> {
-  const container = getCampaignsContainer();
+  const container = await getCampaignsContainer();
   const { resources } = await container.items
     .query({
       query: "SELECT * FROM c ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit",
@@ -37,7 +37,7 @@ export async function listCampaigns(limit = 50): Promise<Campaign[]> {
 }
 
 export async function getCampaign(id: string): Promise<Campaign | null> {
-  const container = getCampaignsContainer();
+  const container = await getCampaignsContainer();
   // Need to query since we don't know the partition key value
   const { resources } = await container.items
     .query({
@@ -49,6 +49,6 @@ export async function getCampaign(id: string): Promise<Campaign | null> {
 }
 
 export async function deleteCampaign(id: string, brandName: string): Promise<void> {
-  const container = getCampaignsContainer();
+  const container = await getCampaignsContainer();
   await container.item(id, brandName).delete();
 }

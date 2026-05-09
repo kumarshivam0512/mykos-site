@@ -1,17 +1,11 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { CosmosClient } from "@azure/cosmos";
+import { getUsersContainer } from "@/lib/db/cosmos";
 import { createHash } from "crypto";
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
 }
-
-const cosmosClient = new CosmosClient({
-  endpoint: process.env.COSMOS_ENDPOINT || "",
-  key: process.env.COSMOS_KEY || "",
-});
-const usersContainer = cosmosClient.database("mykos").container("users");
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -35,6 +29,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (isSignup) {
           // Check if user exists
+          const usersContainer = await getUsersContainer();
           const { resources } = await usersContainer.items.query({
             query: "SELECT * FROM c WHERE c.email = @email",
             parameters: [{ name: "@email", value: email }],
@@ -55,6 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         // Login
+        const usersContainer = await getUsersContainer();
         const { resources } = await usersContainer.items.query({
           query: "SELECT * FROM c WHERE c.email = @email AND c.passwordHash = @hash",
           parameters: [
