@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useAdStore } from "@/store/use-ad-store";
 import type { Character } from "@/lib/db/characters";
 import type { Location } from "@/lib/db/locations";
+import { QualityTierSelector } from "@/components/quality-tier-selector";
+import { AD_TYPE_LABELS, type AdType } from "@/lib/templates/golden-templates";
 import {
   Palette,
   Plus,
@@ -20,6 +22,7 @@ import {
   MapPin,
   X,
   Camera,
+  Wand2,
 } from "lucide-react";
 
 interface RealismSettings {
@@ -76,7 +79,10 @@ interface SceneInput {
   cameraAngle: string;
   lighting: string;
   colorGrade: string;
-  characterRefUrl?: string; // Face reference URL from Character Library
+  /** Face/subject reference photo URL (Character Library or per-scene upload). */
+  characterRefUrl?: string;
+  /** Label for UI display: which character this ref came from, or "Your upload". */
+  characterRefLabel?: string;
 }
 
 const MOODS = ["Aspirational", "Energetic", "Calm", "Luxurious", "Playful", "Gritty", "Professional", "Warm", "Dramatic", "Minimal"];
@@ -223,7 +229,7 @@ function MentionField({ value, onChange, placeholder, rows, mentionType, items, 
 
 export default function SceneBuilderPage() {
   const router = useRouter();
-  const { productInput, brandKit, brief, setAssets } = useAdStore();
+  const { productInput, brandKit, brief, setAssets, selectedTier, setTier, updateBrief, setBrief } = useAdStore();
 
   const [scenes, setScenes] = useState<SceneInput[]>([createEmptyScene()]);
   const [expandedScene, setExpandedScene] = useState<string | null>(scenes[0]?.id);
@@ -244,10 +250,132 @@ export default function SceneBuilderPage() {
   // Multi-angle product images
   const [productAngles, setProductAngles] = useState<{ file: File; preview: string; label: string }[]>([]);
 
+  // ── Idea-to-Scenes auto-fill ────────────────────────────────────
+  const [ideaText, setIdeaText] = useState("");
+  const [ideaAdType, setIdeaAdType] = useState<AdType>("brand_campaign");
+  const [ideaLoading, setIdeaLoading] = useState(false);
+  const [ideaTemplateUsed, setIdeaTemplateUsed] = useState<{ label: string; refs: string[] } | null>(null);
+
   useEffect(() => {
     fetch("/api/characters").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setCharacters(d); }).catch(() => {});
     fetch("/api/locations").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setLocations(d); }).catch(() => {});
   }, []);
+
+  /**
+   * Auto-fill all scene inputs from a free-text idea using the Golden Dataset.
+   * On success: replaces scenes, persists character + location to libraries,
+   * sets tier + realism preset, and refreshes the @ mention dropdowns.
+   */
+  const handleGenerateFromIdea = async () => {
+    if (!ideaText.trim()) {
+      setError("Type an idea first — e.g. 'Launch ad for our minimalist B2B productivity app called Stride'");
+      return;
+    }
+    if (!productInput.name) {
+      setError("Set up your brand first in the Brand Hub so the AI knows what brand to write for");
+      return;
+    }
+
+    setIdeaLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/scenes-from-idea", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idea: ideaText,
+          brandName: productInput.name,
+          productDescription: productInput.description,
+          adType: ideaAdType,
+          tierOverride: selectedTier,
+          persistToLibraries: true,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to generate scenes from idea");
+      }
+      const data = await res.json() as {
+        templateLabel: string;
+        referenceAds: string[];
+        tier: "budget" | "premium" | "ultra";
+        realismPreset: "off" | "photo" | "cinematic" | "raw";
+        scenes: Array<{
+          mood: string; setting: string; characterAction: string;
+          productPlacement: string; cameraAngle: string; lighting: string;
+          colorGrade: string; motion: string; duration: number;
+        }>;
+        voiceoverScript: string;
+        voiceoverSegments: Array<{ sceneIndex: number; text: string; targetWords: number }>;
+        musicStyle: string;
+        endCardTagline: string;
+        endCardCta: string;
+      };
+
+      // Build SceneInput[] from the adapter output.
+      const newScenes: SceneInput[] = data.scenes.map((s, i) => ({
+        id: `scene_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+        mood: s.mood,
+        setting: s.setting,
+        characterAction: s.characterAction,
+        productPlacement: s.productPlacement,
+        cameraAngle: s.cameraAngle,
+        lighting: s.lighting,
+        colorGrade: s.colorGrade,
+      }));
+
+      setScenes(newScenes);
+      setExpandedScene(newScenes[0]?.id ?? null);
+      setGeneratedImages([]); // discard old generated images
+
+      // Apply tier + realism preset from the template's recommendation.
+      setTier(data.tier);
+      const presetSettings = REALISM_PRESETS[data.realismPreset]?.settings;
+      if (presetSettings) {
+        setRealismPreset(data.realismPreset);
+        setRealism(presetSettings);
+      }
+
+      // Propagate voiceover script + segments + end card to the brief so the
+      // Video Studio can use them for pacing-aware TTS and the assemble step.
+      if (brief) {
+        updateBrief({
+          voiceoverScript: data.voiceoverScript,
+          voiceoverSegments: data.voiceoverSegments,
+          musicDirection: data.musicStyle,
+          endCard: { tagline: data.endCardTagline, ctaText: data.endCardCta },
+        });
+      } else {
+        // No brief yet — scaffold a minimal one so downstream pages don't crash.
+        setBrief({
+          productCategory: "",
+          targetAudience: { ageRange: "", gender: "", platforms: [], psychographics: [] },
+          personas: [],
+          platformBriefs: [],
+          adFormat: "cinematic_lifestyle",
+          sceneBackdrop: "",
+          characterSheet: "",
+          duration: data.scenes.reduce((sum, s) => sum + s.duration, 0),
+          scenes: [],
+          voiceoverScript: data.voiceoverScript,
+          voiceoverSegments: data.voiceoverSegments,
+          musicDirection: data.musicStyle,
+          cameraSettings: { focalLength: "85mm", aperture: "f/2.0", colorGrade: "Warm cinematic" },
+          endCard: { tagline: data.endCardTagline, ctaText: data.endCardCta },
+        });
+      }
+
+      // Refresh @ mention dropdowns so the new character/location appear.
+      fetch("/api/characters").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setCharacters(d); }).catch(() => {});
+      fetch("/api/locations").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setLocations(d); }).catch(() => {});
+
+      setIdeaTemplateUsed({ label: data.templateLabel, refs: data.referenceAds });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIdeaLoading(false);
+    }
+  };
 
   const addProductAngle = (file: File) => {
     const preview = URL.createObjectURL(file);
@@ -312,7 +440,26 @@ export default function SceneBuilderPage() {
         }
       }
 
+      // Upload logo if provided (one-time upload, then reuse URL)
+      let uploadedLogoUrl = brandKit.logoUrl;
+      if (logoFile && !uploadedLogoUrl) {
+        const fd = new FormData();
+        fd.append("file", logoFile);
+        fd.append("type", "logo");
+        const lr = await fetch("/api/upload", { method: "POST", body: fd });
+        if (lr.ok) {
+          uploadedLogoUrl = (await lr.json()).url;
+        }
+      }
+
       // Generate image for each scene using the scene-to-prompt API
+      // Pass existing scene image URLs from any prior partial run so the server
+      // skips them and we only pay for the ones that still need to be generated.
+      const existingImages = scenes.map((s) => {
+        const prior = generatedImages.find((g) => g.sceneId === s.id);
+        return prior?.url || null;
+      });
+
       const res = await fetch("/api/scene-to-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -321,11 +468,14 @@ export default function SceneBuilderPage() {
           productName: productInput.name,
           productDescription: productInput.description,
           brandColors: brandKit.colors,
+          logoUrl: uploadedLogoUrl,
           sceneBackdrop: brief?.sceneBackdrop,
           characterSheet: brief?.characterSheet,
           hasProductImage: !!productImageUrl || !!productImage || productAngles.length > 0,
           realism,
           productAngleUrls: angleUrls.length > 0 ? angleUrls : undefined,
+          tier: selectedTier,
+          existingImages,
         }),
       });
 
@@ -335,26 +485,43 @@ export default function SceneBuilderPage() {
       }
 
       const data = await res.json();
-      const newImages = data.images.map((img: { url: string; sourceUrl?: string }, i: number) => ({
-        sceneId: scenes[i]?.id || `scene_${i}`,
-        url: img.url,
-        sourceUrl: img.sourceUrl,
-      }));
+      // Server now returns an array with nulls for failed scenes — accept partials so
+      // the user can retry just the broken ones instead of starting over.
+      const newImages: { sceneId: string; url: string; sourceUrl?: string }[] = [];
+      for (let i = 0; i < (data.images as ({ url: string; sourceUrl?: string } | null)[]).length; i++) {
+        const img = (data.images as ({ url: string; sourceUrl?: string } | null)[])[i];
+        if (img) {
+          newImages.push({
+            sceneId: scenes[i]?.id || `scene_${i}`,
+            url: img.url,
+            sourceUrl: img.sourceUrl,
+          });
+        }
+      }
       setGeneratedImages(newImages);
+
+      if (data.partial && Array.isArray(data.errors) && data.errors.length > 0) {
+        const failedIndexes = (data.errors as { index: number; message: string }[]).map((e) => e.index + 1);
+        const firstMsg = (data.errors as { index: number; message: string }[])[0].message;
+        setError(`Partial result — scene(s) ${failedIndexes.join(", ")} failed (${firstMsg}). Click Generate again to resume only the failed scenes.`);
+      }
 
       // Persist to global store so Poster/Video Studio can access them
       setAssets({
-        images: newImages.map((g: { url: string }) => g.url),
-        sourceUrls: newImages.map((g: { sourceUrl?: string }) => g.sourceUrl).filter(Boolean) as string[],
+        images: newImages.map((g) => g.url),
+        sourceUrls: newImages.map((g) => g.sourceUrl).filter((u): u is string => !!u),
         realism: realism as unknown as Record<string, boolean>,
         productAngleUrls: angleUrls.length > 0 ? angleUrls : undefined,
+        // Per-scene character refs — preserves the @character mention or upload for use in video
+        characterRefUrls: scenes.map((s) => s.characterRefUrl),
+        tier: selectedTier,
       });
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setGenerating(false);
     }
-  }, [scenes, productInput, brandKit, brief, productImage, productImageUrl, realism, setAssets, productAngles]);
+  }, [scenes, productInput, brandKit, brief, productImage, productImageUrl, realism, setAssets, productAngles, logoFile, selectedTier]);
 
   return (
     <main className="flex-1 overflow-y-auto">
@@ -371,6 +538,54 @@ export default function SceneBuilderPage() {
               <span className="text-primary ml-1">Brand: {productInput.name}</span>
             )}
           </p>
+        </div>
+
+        {/* ── Idea-to-Scenes Auto-Fill ───────────────────────────── */}
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Wand2 className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold">Generate from idea</h3>
+            <span className="text-[10px] text-muted-foreground">— skip the form, type your idea, edit anything after</span>
+          </div>
+          <textarea
+            value={ideaText}
+            onChange={(e) => setIdeaText(e.target.value)}
+            placeholder={`e.g. "Launch ad for our minimalist B2B productivity app called Stride, targeting marketing teams"  ·  "30s hero film for our new running shoe drop, urban Indian millennials"  ·  "Macro product film for our handcrafted whiskey"`}
+            rows={2}
+            className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+            disabled={ideaLoading}
+          />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[11px] text-muted-foreground mb-1">Ad type</label>
+              <select
+                value={ideaAdType}
+                onChange={(e) => setIdeaAdType(e.target.value as AdType)}
+                disabled={ideaLoading}
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {(Object.entries(AD_TYPE_LABELS) as Array<[AdType, string]>).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handleGenerateFromIdea}
+              disabled={ideaLoading || !ideaText.trim()}
+              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-medium px-4 py-2 rounded-xl flex items-center gap-2 text-sm"
+            >
+              {ideaLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate from idea</>}
+            </button>
+          </div>
+          {ideaTemplateUsed && (
+            <div className="text-[11px] text-muted-foreground bg-card border border-border rounded-lg px-3 py-2">
+              <span className="text-primary font-medium">Template used:</span> {ideaTemplateUsed.label}
+              {ideaTemplateUsed.refs.length > 0 && (
+                <span className="block mt-0.5">Inspired by: {ideaTemplateUsed.refs.join(" · ")}</span>
+              )}
+              <span className="block mt-0.5 text-muted-foreground/70">Tier, realism, and aspect ratio set to template defaults. Character + location saved to your library. Edit anything below.</span>
+            </div>
+          )}
         </div>
 
         {/* Product & Logo Upload */}
@@ -422,6 +637,11 @@ export default function SceneBuilderPage() {
               </label>
             </div>
           </div>
+        </div>
+
+        {/* Quality Tier Selector */}
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <QualityTierSelector value={selectedTier} onChange={setTier} />
         </div>
 
         {/* Ultra-Realism Panel */}
@@ -493,10 +713,19 @@ export default function SceneBuilderPage() {
 
             return (
               <div key={scene.id} className="bg-card border border-border rounded-2xl overflow-hidden">
-                {/* Scene Header */}
-                <button
+                {/* Scene Header — div+role=button (not a real <button>) because it
+                    contains a nested delete <button>, which is invalid HTML. */}
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setExpandedScene(isExpanded ? null : scene.id)}
-                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-secondary/30"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setExpandedScene(isExpanded ? null : scene.id);
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-secondary/30 cursor-pointer select-none"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-mono">
@@ -518,7 +747,7 @@ export default function SceneBuilderPage() {
                     )}
                     {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
-                </button>
+                </div>
 
                 {/* Scene Body */}
                 {isExpanded && (
@@ -591,9 +820,52 @@ export default function SceneBuilderPage() {
                         mentionType="character"
                         items={characters.map((c) => ({ id: c.id, name: c.name, sheet: characterToSheet(c), refUrl: c.referenceImageUrl }))}
                         onMentionInsert={(item) => {
-                          if (item.refUrl) updateScene(scene.id, { characterRefUrl: item.refUrl });
+                          if (item.refUrl) {
+                            updateScene(scene.id, { characterRefUrl: item.refUrl, characterRefLabel: item.name });
+                          }
                         }}
                       />
+                    </div>
+
+                    {/* Reference Photo for this scene (face/subject consistency) */}
+                    <div className="bg-secondary/30 border border-dashed border-border rounded-xl p-3">
+                      <label className="block text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                        <UserCircle className="w-3.5 h-3.5" />
+                        Reference Photo
+                        <span className="text-muted-foreground/60">(face consistency — auto-set by @character, or upload your own)</span>
+                      </label>
+                      {scene.characterRefUrl ? (
+                        <div className="flex items-center gap-3">
+                          <img src={scene.characterRefUrl} alt="Reference" className="w-12 h-12 rounded-lg object-cover border border-border" />
+                          <div className="flex-1">
+                            <div className="text-xs font-medium">{scene.characterRefLabel || "Your upload"}</div>
+                            <div className="text-[10px] text-muted-foreground">Will be passed to the AI as a face/subject reference</div>
+                          </div>
+                          <button onClick={() => updateScene(scene.id, { characterRefUrl: undefined, characterRefLabel: undefined })}
+                            className="text-xs text-muted-foreground hover:text-red-400 px-2 py-1 rounded">
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-2 bg-secondary border border-dashed border-border rounded-lg px-3 py-2 cursor-pointer hover:border-primary/50 text-xs">
+                          <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-muted-foreground">Upload a reference photo (yourself, a model, anyone)</span>
+                          <input type="file" accept="image/*" className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const fd = new FormData();
+                              fd.append("file", file);
+                              fd.append("type", "scene_ref");
+                              const res = await fetch("/api/upload", { method: "POST", body: fd });
+                              if (res.ok) {
+                                const { url } = await res.json();
+                                updateScene(scene.id, { characterRefUrl: url, characterRefLabel: "Your upload" });
+                              }
+                              e.target.value = "";
+                            }} />
+                        </label>
+                      )}
                     </div>
 
                     {/* Product Placement */}

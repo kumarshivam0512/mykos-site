@@ -28,12 +28,15 @@ export async function POST(req: NextRequest) {
 
     await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
-    const absoluteImages = images.map((img: string) =>
-      path.join(process.cwd(), "public", img)
-    );
-    const voiceoverPath = voiceoverUrl
-      ? path.join(process.cwd(), "public", voiceoverUrl)
-      : undefined;
+    // Strip cache-bust query strings ("?v=...") before resolving to a disk path —
+    // FFmpeg cannot open files when the URL contains query parameters.
+    const toDiskPath = (publicUrl: string): string => {
+      const cleaned = publicUrl.split("?")[0].split("#")[0];
+      return path.join(process.cwd(), "public", cleaned);
+    };
+
+    const absoluteImages = images.map(toDiskPath);
+    const voiceoverPath = voiceoverUrl ? toDiskPath(voiceoverUrl) : undefined;
 
     const results: Record<string, string> = {};
 

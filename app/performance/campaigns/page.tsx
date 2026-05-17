@@ -36,7 +36,7 @@ export default function CampaignsPage() {
     setBrief(campaign.brief);
     setAssets({ images: [], variants: [], voiceoverUrl: undefined, videoUrl: undefined });
     setPipelineStep("idle");
-    router.push("/brief");
+    router.push("/creative/brief");
   };
 
   const handleDelete = async (id: string, brandName: string) => {

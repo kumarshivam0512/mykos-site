@@ -255,15 +255,23 @@ export function buildVideoPrompt(
   lines.push(`Shot intent: ${scene.visualPrompt.substring(0, 100)}`);
   lines.push("");
 
-  // Time beats
+  // Time beats — scaled to the scene's actual duration. A 12s luxury hero shot
+  // needs more breathing room than a 5s clip; hardcoding 0-1/1-4/4-5 makes
+  // long clips feel back-loaded with dead air.
+  const dur = Math.max(1, scene.duration || 5);
+  const openEnd = (dur * 0.2).toFixed(1);     // first 20%: hold opening frame
+  const moveEnd = (dur * 0.8).toFixed(1);     // next 60%: camera move / ambient motion
+  const closeStart = moveEnd;                 // last 20%: settle
+  const closeEnd = dur.toFixed(1);
+
   if (isStatic) {
-    lines.push("0-1s: Frame as shown in source image, subject settled");
-    lines.push("1-4s: Subtle ambient motion only — fabric shifts, light plays, atmosphere breathes");
-    lines.push("4-5s: Hold on the composition, natural settling");
+    lines.push(`0-${openEnd}s: Frame as shown in source image, subject settled`);
+    lines.push(`${openEnd}-${moveEnd}s: Subtle ambient motion only — fabric shifts, light plays, atmosphere breathes`);
+    lines.push(`${closeStart}-${closeEnd}s: Hold on the composition, natural settling`);
   } else {
-    lines.push("0-1s: Opening frame as shown in source image");
-    lines.push(`1-4s: Camera performs ${namedMove.replace(/-/g, " ")}; subject has minimal controlled movement`);
-    lines.push("4-5s: Camera settles, composition resolves");
+    lines.push(`0-${openEnd}s: Opening frame as shown in source image`);
+    lines.push(`${openEnd}-${moveEnd}s: Camera performs ${namedMove.replace(/-/g, " ")}; subject has minimal controlled movement`);
+    lines.push(`${closeStart}-${closeEnd}s: Camera settles, composition resolves`);
   }
 
   lines.push("");

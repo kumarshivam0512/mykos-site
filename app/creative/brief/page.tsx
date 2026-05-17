@@ -188,7 +188,7 @@ export default function BriefPage() {
               <Download className="w-4 h-4" /> TXT
             </button>
             <button
-              onClick={() => router.push("/creative/generate")}
+              onClick={() => router.push("/creative")}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-3 rounded-xl flex items-center gap-2"
             >
               Generate Ad <ArrowRight className="w-4 h-4" />
@@ -600,7 +600,7 @@ export default function BriefPage() {
 
             {/* Generate Button */}
             <button
-              onClick={() => router.push("/creative/generate")}
+              onClick={() => router.push("/creative")}
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-4 rounded-xl flex items-center justify-center gap-2 text-lg"
             >
               Generate Ad <ArrowRight className="w-5 h-5" />

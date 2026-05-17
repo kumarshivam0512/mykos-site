@@ -23,10 +23,11 @@ export function pickVoice(musicDirection: string): string {
 export async function generateVoiceover(
   script: string,
   voice: string,
-  outputDir: string
+  outputDir: string,
+  outputFilename: string = "voiceover.wav"
 ): Promise<string> {
   await fs.mkdir(outputDir, { recursive: true });
-  const outputPath = path.join(outputDir, "voiceover.mp3");
+  const outputPath = path.join(outputDir, outputFilename);
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
   const model = genAI.getGenerativeModel({
@@ -41,9 +42,35 @@ export async function generateVoiceover(
     } as Record<string, unknown>,
   });
 
-  const result = await model.generateContent(
-    `Read the following ad voiceover script in a professional, clear, engaging tone suitable for a commercial advertisement:\n\n${script}`
-  );
+  // Gemini TTS free tier is 3 requests per minute. Retry on 429 with backoff
+  // that respects the server-suggested retryDelay when present, so the user's
+  // 4-scene segment-mode batch doesn't die on the 4th call.
+  const maxAttempts = 5;
+  let lastErr: unknown;
+  let result: Awaited<ReturnType<typeof model.generateContent>> | undefined;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      result = await model.generateContent(
+        `Read the following ad voiceover script in a professional, clear, engaging tone suitable for a commercial advertisement:\n\n${script}`
+      );
+      break;
+    } catch (err) {
+      lastErr = err;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = err as { status?: number; errorDetails?: Array<{ "@type"?: string; retryDelay?: string }>; message?: string };
+      const is429 = e?.status === 429 || (e?.message ?? "").includes("429");
+      if (!is429 || attempt === maxAttempts) throw err;
+
+      // Pull the server-suggested retryDelay (e.g. "9s") if present, otherwise
+      // exponential backoff starting at 12s.
+      const retryInfo = e.errorDetails?.find((d) => d["@type"]?.endsWith("RetryInfo"));
+      const suggested = retryInfo?.retryDelay?.match(/(\d+)s?/)?.[1];
+      const waitMs = suggested ? (parseInt(suggested, 10) + 1) * 1000 : Math.min(60_000, 12_000 * attempt);
+      console.warn(`[TTS] rate-limited (429), waiting ${Math.round(waitMs / 1000)}s before retry ${attempt + 1}/${maxAttempts}`);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  if (!result) throw lastErr ?? new Error("TTS failed without specific error");
 
   const audioData = result.response.candidates?.[0]?.content?.parts?.[0];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,7 +84,9 @@ export async function generateVoiceover(
 
   // Gemini TTS returns raw PCM — wrap it in a WAV container
   const wavBuffer = pcmToWav(audioBuffer, 24000, 1, 16);
-  const wavPath = outputPath.replace(/\.mp3$/, ".wav");
+  // Force a .wav extension regardless of what the caller passed (legacy callers
+  // pass "voiceover.mp3" but the file is actually WAV).
+  const wavPath = outputPath.replace(/\.\w+$/, ".wav");
   await fs.writeFile(wavPath, wavBuffer);
 
   return wavPath;

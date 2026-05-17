@@ -83,6 +83,19 @@ export interface CameraSettings {
 }
 
 // ─── Creative Brief (full AI output) ────────────────────────
+/**
+ * Voiceover broken into per-scene segments so each segment's pacing can be
+ * calibrated to the scene's actual duration (~140 WPM ≈ 2.4 words/second).
+ * Optional for back-compat — the legacy single-blob `voiceoverScript` is
+ * always present.
+ */
+export interface VoiceoverSegment {
+  sceneIndex: number;
+  text: string;
+  /** Target word count = round(sceneDuration × 2.4). */
+  targetWords: number;
+}
+
 export interface CreativeBrief {
   productCategory: string;
   targetAudience: TargetAudience;
@@ -95,6 +108,7 @@ export interface CreativeBrief {
   duration: number;
   scenes: Scene[];
   voiceoverScript: string;
+  voiceoverSegments?: VoiceoverSegment[];
   musicDirection: string;
   cameraSettings: CameraSettings;
   endCard: {
@@ -123,6 +137,9 @@ export interface PipelineStatus {
   error?: string;
 }
 
+// ─── Quality Tier (user-selected per generation) ─────────────
+export type QualityTier = "budget" | "premium" | "ultra";
+
 // ─── Generated Assets ───────────────────────────────────────
 export interface GeneratedAssets {
   images: string[];
@@ -130,11 +147,17 @@ export interface GeneratedAssets {
   sourceUrls?: string[]; // Original provider URLs (for i2v, avoids re-upload)
   videoClips?: string[];
   voiceoverUrl?: string;
+  /** Per-scene voiceover segments — index-aligned with scene index. */
+  voiceoverSegments?: { sceneIndex: number; url: string }[];
   musicTrack?: string;
   videoUrl?: string;
   // Persisted from Scene Builder so Video Studio can access them
   realism?: Record<string, boolean>;
   productAngleUrls?: string[];
+  /** Per-scene character reference photo URLs, index aligned with images[]. */
+  characterRefUrls?: (string | undefined)[];
+  /** User's chosen quality tier — drives model selection across the pipeline. */
+  tier?: QualityTier;
 }
 
 // ─── Full Ad State ──────────────────────────────────────────

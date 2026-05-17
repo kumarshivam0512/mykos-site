@@ -37,7 +37,7 @@ export default function AudiencePage() {
         {/* Header */}
         <div>
           <button
-            onClick={() => router.push("/brief")}
+            onClick={() => router.push("/creative/brief")}
             className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-sm mb-2"
           >
             <ArrowLeft className="w-4 h-4" /> Back to Brief

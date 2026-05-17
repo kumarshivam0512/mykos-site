@@ -8,6 +8,7 @@ import type {
   PipelineStatus,
   PipelineStep,
   VideoMode,
+  QualityTier,
 } from "@/lib/types";
 
 interface AdStore {
@@ -19,6 +20,8 @@ interface AdStore {
   pipeline: PipelineStatus;
   selectedAspectRatio: string;
   videoMode: VideoMode;
+  /** Currently selected quality tier — drives WaveSpeed model routing. */
+  selectedTier: QualityTier;
 
   // Actions
   setProductInput: (input: Partial<ProductInput>) => void;
@@ -31,6 +34,7 @@ interface AdStore {
   setPipelineError: (error: string) => void;
   setAspectRatio: (ratio: string) => void;
   setVideoMode: (mode: VideoMode) => void;
+  setTier: (tier: QualityTier) => void;
   reset: () => void;
 }
 
@@ -42,6 +46,7 @@ const initialState = {
   pipeline: { step: "idle" as PipelineStep, progress: 0, message: "" },
   selectedAspectRatio: "16:9",
   videoMode: "slideshow" as VideoMode,
+  selectedTier: "premium" as QualityTier,
 };
 
 export const useAdStore = create<AdStore>()(
@@ -77,6 +82,8 @@ export const useAdStore = create<AdStore>()(
       setAspectRatio: (ratio) => set({ selectedAspectRatio: ratio }),
 
       setVideoMode: (mode) => set({ videoMode: mode }),
+
+      setTier: (tier) => set({ selectedTier: tier }),
 
       reset: () => set(initialState),
     }),

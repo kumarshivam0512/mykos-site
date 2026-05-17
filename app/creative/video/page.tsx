@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAdStore } from "@/store/use-ad-store";
+import { QualityTierSelector } from "@/components/quality-tier-selector";
 import {
   Video,
   ArrowLeft,
@@ -14,6 +15,10 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Wand2,
+  Upload,
+  Plus,
+  X,
 } from "lucide-react";
 
 // Camera moves the user can choose per scene (maps to prompt engine NAMED_MOVES)
@@ -30,13 +35,18 @@ const CAMERA_MOVES = [
   { id: "drone", label: "FPV / Drone", desc: "Aerial flythrough" },
 ];
 
-const VIDEO_MODELS = [
-  { id: "auto", label: "Auto (cheapest)", tier: "Smart" },
-  { id: "kling-2.1-standard", label: "Kling 2.1 Standard", tier: "Good" },
-  { id: "kling-2.1-pro", label: "Kling 2.1 Pro", tier: "Better" },
-  { id: "seedance-pro", label: "Seedance Pro", tier: "Best" },
-  { id: "wan-2.2", label: "Wan 2.2 Fast", tier: "Budget" },
-];
+/**
+ * Allowed clip durations per quality tier. Reflects the underlying model
+ * constraints so the UI doesn't lie:
+ *   - Budget (Wan 2.2): any duration 1–12s
+ *   - Premium (Kling v2.5 Turbo Pro): only 5s or 10s — anything else snaps
+ *   - Ultra (Seedance 2.0): 5–12s (Wan 2.7 ref path caps at 10s)
+ */
+const TIER_DURATION_OPTIONS: Record<"budget" | "premium" | "ultra", number[]> = {
+  budget: [3, 5, 8, 10, 12],
+  premium: [5, 10],
+  ultra: [5, 8, 10, 12],
+};
 
 interface SceneMotion {
   cameraMove: string;
@@ -45,7 +55,7 @@ interface SceneMotion {
 }
 
 export default function VideoStudioPage() {
-  const { assets, brief, brandKit, productInput, setAssets } = useAdStore();
+  const { assets, brief, brandKit, productInput, setAssets, selectedTier, setTier } = useAdStore();
   const scenes = assets.images || [];
   const sourceUrls = assets.sourceUrls || [];
 
@@ -53,7 +63,6 @@ export default function VideoStudioPage() {
   const [sceneMotions, setSceneMotions] = useState<SceneMotion[]>(
     () => scenes.map(() => ({ cameraMove: "push in", motionPrompt: "", duration: 5 }))
   );
-  const [selectedModel, setSelectedModel] = useState("kling-2.1-pro");
   const [duration, setDuration] = useState(5);
   const [expandedScene, setExpandedScene] = useState<number | null>(0);
   // Hero Frame: index of the scene whose image anchors character identity across all clips
@@ -68,7 +77,120 @@ export default function VideoStudioPage() {
   const [assembling, setAssembling] = useState(false);
   const [finalVideo, setFinalVideo] = useState<string | null>(assets.videoUrl || null);
 
+  // Voiceover state
+  const [generatingVoiceover, setGeneratingVoiceover] = useState(false);
+  const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(assets.voiceoverUrl || null);
+
   const [error, setError] = useState("");
+
+  // AI-fill loading state for the per-scene motion descriptions.
+  const [motionsLoading, setMotionsLoading] = useState(false);
+
+  /**
+   * Auto-fill every scene's motion description (the optional textarea under
+   * each scene card) in one call. Uses the chosen camera move, scene duration,
+   * the brief's per-scene voiceover line (so motion paces with VO), and the
+   * brand context — so motion direction stays on-brand and per-scene specific.
+   */
+  const handleFillMotions = async () => {
+    if (!scenes.length) {
+      setError("Generate scene images first before AI-filling motion.");
+      return;
+    }
+    setMotionsLoading(true);
+    setError("");
+    try {
+      const segments = brief?.voiceoverSegments || [];
+      const payloadScenes = sceneMotions.map((m, i) => ({
+        index: i,
+        cameraMove: m.cameraMove,
+        duration: m.duration,
+        voiceoverText: segments.find((s) => s.sceneIndex === i)?.text,
+        // For grounding — Scene Builder writes setting+characterAction into the
+        // brief.scenes only when generated via the brief flow. For the idea-to-
+        // scenes flow, we approximate by re-using the scene index + camera move
+        // (the orchestrator already wrote scene-specific text into the prompt).
+        sceneContext: brief?.scenes?.[i]?.visualPrompt,
+      }));
+
+      const res = await fetch("/api/motion-descriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenes: payloadScenes,
+          brandName: productInput.name,
+          productDescription: productInput.description,
+          sceneBackdrop: brief?.sceneBackdrop,
+          characterSheet: brief?.characterSheet,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to fill motion descriptions");
+      }
+      const data = await res.json() as { motions: { sceneIndex: number; motionPrompt: string }[] };
+      setSceneMotions((prev) => prev.map((m, i) => {
+        const filled = data.motions.find((x) => x.sceneIndex === i);
+        return filled ? { ...m, motionPrompt: filled.motionPrompt } : m;
+      }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setMotionsLoading(false);
+    }
+  };
+
+  // ── Upload existing scene images ─────────────────────────────────
+  // Lets the user bypass the Scene Builder image-gen step and bring their
+  // own images straight into Video Studio for animation.
+  const [uploadingImages, setUploadingImages] = useState(false);
+
+  const handleUploadSceneImages = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadingImages(true);
+    setError("");
+    try {
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const fd = new FormData();
+        fd.append("file", files[i]);
+        fd.append("type", `scene_${i}`);
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        if (!res.ok) throw new Error(`Failed to upload ${files[i].name}`);
+        const { url } = await res.json();
+        uploadedUrls.push(url);
+      }
+      // Merge with any existing scenes (append, don't replace) so the user
+      // can mix Scene-Builder-generated + uploaded images if they want.
+      const mergedImages = [...scenes, ...uploadedUrls];
+      setAssets({
+        images: mergedImages,
+        // Reset source URLs — we don't have provider URLs for uploads, so
+        // image-to-video will use the public /uploads path (resolver handles it).
+        sourceUrls: [...(assets.sourceUrls || []), ...uploadedUrls.map(() => "")],
+      });
+      // Initialise motion slots for the newly added scenes.
+      setSceneMotions((prev) => [
+        ...prev,
+        ...uploadedUrls.map(() => ({ cameraMove: "push in", motionPrompt: "", duration: 5 })),
+      ]);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const handleRemoveScene = (idx: number) => {
+    const newImages = scenes.filter((_, i) => i !== idx);
+    setAssets({
+      images: newImages,
+      sourceUrls: (assets.sourceUrls || []).filter((_, i) => i !== idx),
+      videoClips: (assets.videoClips || []).filter((_, i) => i !== idx),
+    });
+    setSceneMotions((prev) => prev.filter((_, i) => i !== idx));
+    setGeneratedClips((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const updateSceneMotion = (idx: number, updates: Partial<SceneMotion>) => {
     setSceneMotions((prev) => prev.map((m, i) => (i === idx ? { ...m, ...updates } : m)));
@@ -105,18 +227,24 @@ export default function VideoStudioPage() {
           images: scenes,
           scenes: apiScenes,
           sourceUrls: sourceUrls.length ? sourceUrls : undefined,
-          model: selectedModel,
+          tier: selectedTier,
           aspectRatio: "16:9",
           duration: Math.max(...sceneMotions.map((m) => m.duration)),
-          hasProductImage: !!(assets.productAngleUrls?.length),
           cameraSettings: brief?.cameraSettings,
           adFormat: brief?.adFormat,
           sceneBackdrop: brief?.sceneBackdrop,
           characterSheet: brief?.characterSheet,
           realism: assets.realism || undefined,
           // Hero Frame Chaining: use hero frame's source image for all clips
-          // This ensures the same character face appears across all video clips
           heroFrameIdx: heroFrameIdx,
+          // Reference images for character/product/logo consistency
+          productAngleUrls: assets.productAngleUrls,
+          logoUrl: brandKit.logoUrl,
+          // Per-scene character refs (from Scene Builder @character mentions or uploads)
+          characterRefUrls: assets.characterRefUrls,
+          // Resume: pass any clips we already have so the server skips them and we
+          // only pay for the ones that still need to be generated.
+          existingClips: generatedClips.length ? generatedClips : undefined,
         }),
       });
 
@@ -126,13 +254,67 @@ export default function VideoStudioPage() {
       }
 
       const data = await res.json();
-      setGeneratedClips(data.clips);
-      setAssets({ videoClips: data.clips });
-      setClipProgress({ current: data.scenesGenerated, total: data.scenesGenerated });
+      // Server may return nulls for failed clips (partial result) — keep them as nulls
+      // so the user can see which scenes still need to be regenerated.
+      const clips = (data.clips as (string | null)[]) || [];
+      const finalClips = clips.map((c, i) => c || generatedClips[i] || null).filter((c): c is string => !!c);
+      setGeneratedClips(finalClips);
+      setAssets({ videoClips: finalClips });
+      setClipProgress({ current: finalClips.length, total: clips.length });
+
+      if (data.partial && Array.isArray(data.errors) && data.errors.length > 0) {
+        const failedIndexes = (data.errors as { index: number; message: string }[]).map((e) => e.index + 1);
+        const firstMsg = (data.errors as { index: number; message: string }[])[0].message;
+        setError(`Partial result — clip(s) ${failedIndexes.join(", ")} failed (${firstMsg}). Click Generate again to resume only the failed clips.`);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setGeneratingClips(false);
+    }
+  };
+
+  const handleGenerateVoiceover = async () => {
+    if (!brief?.voiceoverScript) {
+      setError("No voiceover script found in the brief. Generate one in the Brand Hub first.");
+      return;
+    }
+    setGeneratingVoiceover(true);
+    setError("");
+    try {
+      // If the brief carries per-scene segments (from idea-to-scenes), use them
+      // so each line is paced to its scene's duration. Otherwise fall back to
+      // the single-blob script (legacy path).
+      const useSegments = brief.voiceoverSegments && brief.voiceoverSegments.length > 0;
+      const body = useSegments
+        ? {
+            segments: brief.voiceoverSegments,
+            musicDirection: brief.musicDirection || "professional",
+          }
+        : {
+            script: brief.voiceoverScript,
+            musicDirection: brief.musicDirection || "professional",
+          };
+
+      const res = await fetch("/api/generate-voiceover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to generate voiceover");
+      }
+      const data = await res.json() as { voiceoverUrl: string; segments?: { sceneIndex: number; url: string }[] };
+      setVoiceoverUrl(data.voiceoverUrl);
+      setAssets({
+        voiceoverUrl: data.voiceoverUrl,
+        voiceoverSegments: data.segments,
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGeneratingVoiceover(false);
     }
   };
 
@@ -147,7 +329,17 @@ export default function VideoStudioPage() {
         body: JSON.stringify({
           videoClips: generatedClips,
           durations: sceneMotions.map((m) => m.duration),
-          voiceoverUrl: assets.voiceoverUrl || undefined,
+          voiceoverUrl: voiceoverUrl || assets.voiceoverUrl || undefined,
+          // Phase 2: per-scene voiceover segments — each is delayed to its
+          // scene offset in the final mix.
+          voiceoverSegments: assets.voiceoverSegments,
+          // Tier drives codec preset / CRF / audio bitrate; adFormat drives
+          // voice-vs-music mix so luxury content sounds different from UGC.
+          tier: selectedTier,
+          adFormat: brief?.adFormat,
+          // Phase 3: keep model-native ambient audio (Kling v2.5 only); silent
+          // models (Seedance / Wan) ignore this. Default ON for Premium tier.
+          useNativeAudio: selectedTier === "premium",
         }),
       });
 
@@ -166,21 +358,64 @@ export default function VideoStudioPage() {
     }
   };
 
-  // ─── Empty state ──────────────────────────────────────────────
+  // ─── Empty state — offer upload of existing images ─────────────
   if (scenes.length === 0) {
     return (
-      <main className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto">
-            <Video className="w-8 h-8 text-blue-400" />
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto p-6 space-y-6 pt-12">
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto">
+              <Video className="w-8 h-8 text-blue-400" />
+            </div>
+            <h1 className="text-2xl font-bold">Video Studio</h1>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Animate your scenes into a video ad. Use existing images you already have, or generate fresh ones in the Scene Builder.
+            </p>
           </div>
-          <h1 className="text-2xl font-bold">Video Studio</h1>
-          <p className="text-muted-foreground max-w-md">
-            Generate scenes in the Scene Builder first, then come here to animate them into video.
-          </p>
-          <a href="/creative" className="bg-primary text-primary-foreground px-6 py-2 rounded-xl inline-block">
-            Go to Scene Builder
-          </a>
+
+          {/* Upload existing images */}
+          <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 rounded-2xl p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <Upload className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold">Use my existing scene images</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Drop in PNG or JPG files — each one becomes a scene you can animate. You can reorder, add more, or remove any scene after uploading.
+            </p>
+            <label className="block">
+              <div className="border-2 border-dashed border-primary/40 rounded-xl px-4 py-8 text-center cursor-pointer hover:bg-primary/5 transition-colors">
+                {uploadingImages ? (
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Uploading…
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-6 h-6 text-primary mx-auto mb-2" />
+                    <div className="text-sm font-medium">Click to choose images</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">PNG, JPG, WEBP — multiple files supported</div>
+                  </>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={uploadingImages}
+                onChange={(e) => { handleUploadSceneImages(e.target.files); e.target.value = ""; }}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          {/* Or generate in Scene Builder */}
+          <div className="text-center text-xs text-muted-foreground">
+            <span className="mr-2">or</span>
+            <a href="/creative" className="text-primary hover:underline">generate scenes in the Scene Builder →</a>
+          </div>
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>
+          )}
         </div>
       </main>
     );
@@ -202,40 +437,62 @@ export default function VideoStudioPage() {
           </p>
         </div>
 
+        {/* ─── Quality Tier ─────────────────────────────────── */}
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <QualityTierSelector value={selectedTier} onChange={setTier} title="Quality Tier" />
+        </div>
+
         {/* ─── Global Settings ─────────────────────────────────── */}
         <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
           <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Film className="w-4 h-4" /> Video Settings
           </h3>
-          <div className="grid grid-cols-2 gap-4">
-            {/* Model */}
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">AI Model</label>
-              <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-                {VIDEO_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label} ({m.tier})</option>
-                ))}
-              </select>
-            </div>
 
-            {/* Default Duration */}
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Default Clip Duration</label>
-              <div className="flex gap-2">
-                {[3, 5, 8, 10, 12].map((d) => (
-                  <button key={d} onClick={() => {
-                    setDuration(d);
-                    setSceneMotions((prev) => prev.map((m) => ({ ...m, duration: d })));
-                  }}
-                    className={`flex-1 rounded-xl border px-2 py-2 text-sm ${
-                      duration === d ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
-                    }`}>
-                    {d}s
-                  </button>
-                ))}
+          {/* ── AI Auto-Fill Motion Descriptions ───────────────── */}
+          <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 rounded-xl p-3 flex items-center justify-between gap-3">
+            <div className="flex-1">
+              <div className="text-xs font-medium flex items-center gap-1.5">
+                <Wand2 className="w-3.5 h-3.5 text-primary" />
+                Auto-fill motion descriptions
               </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                AI writes per-scene motion direction based on each scene&apos;s camera move, duration, and voiceover line. You can edit any line after.
+              </p>
             </div>
+            <button
+              onClick={handleFillMotions}
+              disabled={motionsLoading || scenes.length === 0}
+              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs whitespace-nowrap"
+            >
+              {motionsLoading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Filling…</> : <><Sparkles className="w-3.5 h-3.5" /> Fill with AI</>}
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">
+              Default Clip Duration
+              <span className="text-muted-foreground/60 ml-1">
+                (allowed for {selectedTier.toUpperCase()} tier)
+              </span>
+            </label>
+            <div className="flex gap-2">
+              {TIER_DURATION_OPTIONS[selectedTier].map((d) => (
+                <button key={d} onClick={() => {
+                  setDuration(d);
+                  setSceneMotions((prev) => prev.map((m) => ({ ...m, duration: d })));
+                }}
+                  className={`flex-1 rounded-xl border px-2 py-2 text-sm ${
+                    duration === d ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+                  }`}>
+                  {d}s
+                </button>
+              ))}
+            </div>
+            {selectedTier === "premium" && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Kling v2.5 Turbo Pro only accepts 5s or 10s clips.
+              </p>
+            )}
           </div>
 
           {/* Hero Frame for Character Consistency */}
@@ -245,7 +502,7 @@ export default function VideoStudioPage() {
                 Hero Frame <span className="text-primary/60">(character consistency across clips)</span>
               </label>
               <p className="text-[10px] text-muted-foreground mb-2">
-                All clips will use the hero frame as the source image for video generation, preserving the same character face across scenes.
+                Each clip still animates its own scene. The hero frame is passed as an additional identity reference so the same character / product stays consistent across all clips.
               </p>
               <div className="flex gap-2">
                 <button onClick={() => setHeroFrameIdx(null)}
@@ -280,9 +537,19 @@ export default function VideoStudioPage() {
 
             return (
               <div key={idx} className="bg-card border border-border rounded-2xl overflow-hidden">
-                {/* Header */}
-                <button onClick={() => setExpandedScene(isExpanded ? null : idx)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/30">
+                {/* Header — div+role=button so we can nest a delete <button> inside */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setExpandedScene(isExpanded ? null : idx)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setExpandedScene(isExpanded ? null : idx);
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/30 cursor-pointer select-none"
+                >
                   <div className="flex items-center gap-3">
                     <img src={img} alt={`Scene ${idx + 1}`} className="w-16 h-10 object-cover rounded-lg border border-border" />
                     <div className="text-left">
@@ -291,8 +558,19 @@ export default function VideoStudioPage() {
                     </div>
                     {clip && <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full">Clip ready</span>}
                   </div>
-                  {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
+                  <div className="flex items-center gap-2">
+                    {scenes.length > 1 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveScene(idx); }}
+                        className="text-muted-foreground hover:text-red-400 p-1"
+                        title="Remove this scene"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+                </div>
 
                 {/* Expanded body */}
                 {isExpanded && (
@@ -351,7 +629,7 @@ export default function VideoStudioPage() {
                       <div className="w-28 shrink-0">
                         <label className="block text-xs text-muted-foreground mb-1">Duration</label>
                         <div className="flex flex-col gap-1">
-                          {[3, 5, 8, 10, 12].map((d) => (
+                          {TIER_DURATION_OPTIONS[selectedTier].map((d) => (
                             <button key={d} onClick={() => updateSceneMotion(idx, { duration: d })}
                               className={`rounded-lg border px-2 py-1.5 text-xs ${
                                 motion.duration === d ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
@@ -365,6 +643,23 @@ export default function VideoStudioPage() {
               </div>
             );
           })}
+
+          {/* Add more scene images by upload */}
+          <label className="block">
+            <div className="w-full border border-dashed border-border rounded-2xl py-3 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 cursor-pointer">
+              {uploadingImages
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
+                : <><Plus className="w-4 h-4" /> Add scene image(s) from upload</>}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={uploadingImages}
+              onChange={(e) => { handleUploadSceneImages(e.target.files); e.target.value = ""; }}
+              className="hidden"
+            />
+          </label>
         </div>
 
         {/* Error */}
@@ -390,6 +685,33 @@ export default function VideoStudioPage() {
             )}
           </button>
 
+          {/* Voiceover Generation (Optional) */}
+          {generatedClips.length > 0 && brief?.voiceoverScript && (
+            <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium">Voiceover</h3>
+                  <p className="text-xs text-muted-foreground">From brief: &quot;{brief.voiceoverScript.slice(0, 80)}...&quot;</p>
+                </div>
+                {voiceoverUrl ? (
+                  <span className="text-xs bg-green-500/10 text-green-400 px-2 py-1 rounded-full">Ready</span>
+                ) : null}
+              </div>
+              {voiceoverUrl ? (
+                <audio src={voiceoverUrl} controls className="w-full h-8" />
+              ) : (
+                <button onClick={handleGenerateVoiceover} disabled={generatingVoiceover}
+                  className="w-full bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
+                  {generatingVoiceover ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Generating voiceover...</>
+                  ) : (
+                    <>Generate Voiceover</>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Assemble */}
           {generatedClips.length > 0 && (
             <button onClick={handleAssemble} disabled={assembling || generatingClips}
@@ -397,7 +719,7 @@ export default function VideoStudioPage() {
               {assembling ? (
                 <><Loader2 className="w-5 h-5 animate-spin" /> Assembling final video...</>
               ) : (
-                <><Film className="w-5 h-5" /> Assemble Final Video ({generatedClips.length} clips)</>
+                <><Film className="w-5 h-5" /> Assemble Final Video ({generatedClips.length} clips{voiceoverUrl ? " + voiceover" : ""})</>
               )}
             </button>
           )}

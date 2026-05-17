@@ -6,5 +6,6 @@ export async function GET() {
     hasFalKey: !!process.env.FAL_KEY,
     hasReplicateKey: !!process.env.REPLICATE_API_TOKEN,
     hasHiggsfieldKey: !!(process.env.HIGGSFIELD_KEY && process.env.HIGGSFIELD_SECRET),
+    hasWaveSpeedKey: !!process.env.WAVESPEED_API_KEY,
   });
 }
