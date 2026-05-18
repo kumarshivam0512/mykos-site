@@ -91,35 +91,53 @@ export function selectVideoModel(
   const hasRefs = refCount(inputs) > 0;
   const hasSource = !!inputs.sourceImageUrl;
 
-  // Reference-to-video unlocks at Premium+
-  if (hasRefs && tier !== "budget") {
-    const cost = tier === "premium" ? 0.10 * durationSec : 0.15 * durationSec;
-    const model = tier === "premium" ? "Seedance 2.0 Fast Reference" : "Wan 2.7 Reference-to-Video";
-    return {
-      provider: "wavespeed",
-      path: "video-ref",
-      estimatedCostUsd: cost,
-      description: `${tier.toUpperCase()} · ${model} (${refCount(inputs)} refs, ${durationSec}s)`,
-      durationSec,
-    };
-  }
+  // ── ROUTING RULE (read this before changing the branches) ──────────────
+  //
+  // When a generated scene image is present (`sourceImageUrl`), it ALREADY
+  // encodes whatever the references conveyed — Nano Banana Pro Edit Multi
+  // (and the lower tiers' edit models) fused character + product + logo
+  // into the rendered frame. Passing the scene image to image-to-video
+  // preserves that exact outfit / pose / composition.
+  //
+  // Reference-to-video models (Wan 2.7, Seedance v1 Lite) IGNORE the scene
+  // image and re-imagine the frame from raw refs only, which often produces
+  // a totally different outfit than what was in the approved scene. That's
+  // almost never what the user wants after they've signed off the scene.
+  //
+  // So: if a scene image exists, prefer i2v at every tier. Only fall back
+  // to ref-to-video when refs exist but NO scene image (e.g. a campaign
+  // starting straight from references without going through Scene Builder).
 
-  // Image-to-video (most common path)
+  // Image-to-video — preferred path whenever a scene image exists.
   if (hasSource) {
     const costPerSec = { budget: 0.01, premium: 0.084, ultra: 0.15 }[tier];
-    const model = { budget: "Wan 2.2 Ultra Fast", premium: "Kling 3.0 Std", ultra: "Seedance 2.0" }[tier];
+    const model = { budget: "Wan 2.2 Ultra Fast", premium: "Kling v2.5 Turbo Pro", ultra: "Seedance 2.0" }[tier];
+    const refNote = hasRefs ? " (scene image preserves your refs)" : "";
     return {
       provider: "wavespeed",
       path: "video-i2v",
       estimatedCostUsd: costPerSec * durationSec,
-      description: `${tier.toUpperCase()} · ${model} i2v (${durationSec}s)`,
+      description: `${tier.toUpperCase()} · ${model} i2v (${durationSec}s)${refNote}`,
       durationSec,
     };
   }
 
-  // Text-to-video (no source image)
+  // Reference-to-video — only when NO scene image is available.
+  if (hasRefs && tier !== "budget") {
+    const cost = tier === "premium" ? 0.10 * durationSec : 0.15 * durationSec;
+    const model = tier === "premium" ? "Seedance v1 Lite Reference" : "Wan 2.7 Reference-to-Video";
+    return {
+      provider: "wavespeed",
+      path: "video-ref",
+      estimatedCostUsd: cost,
+      description: `${tier.toUpperCase()} · ${model} (${refCount(inputs)} refs, ${durationSec}s, no scene image)`,
+      durationSec,
+    };
+  }
+
+  // Text-to-video — no source image, no refs.
   const costPerSec = { budget: 0.01, premium: 0.084, ultra: 0.15 }[tier];
-  const model = { budget: "Wan 2.2 Ultra Fast", premium: "Kling 3.0 Std", ultra: "Seedance 2.0" }[tier];
+  const model = { budget: "Wan 2.2 Ultra Fast", premium: "Kling v2.5 Turbo Pro", ultra: "Seedance 2.0" }[tier];
   return {
     provider: "wavespeed",
     path: "video-t2v",
