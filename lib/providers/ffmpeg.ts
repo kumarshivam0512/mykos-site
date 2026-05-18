@@ -359,9 +359,15 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
     // VO segments — delay each by its scene's cumulative offset.
     if (useSegments) {
       for (const { sceneIndex, idx } of voSegmentStreamIdx) {
+        // Defensive: skip any segment whose sceneIndex points past the end of
+        // the rendered video. Without this, undefined offsets would default to
+        // 0ms delay and the audio would stack on top of scene 0.
+        if (sceneIndex < 0 || sceneIndex >= sceneOffsets.length) {
+          console.warn(`[ffmpeg] skipping VO segment for scene ${sceneIndex} — outside rendered range [0..${sceneOffsets.length - 1}]`);
+          continue;
+        }
         const offsetMs = Math.round((sceneOffsets[sceneIndex] || 0) * 1000);
         const label = `vo${idx}`;
-        // adelay needs ms per channel; "all" applies to all input channels.
         filterParts.push(`[${idx}:a]adelay=${offsetMs}|${offsetMs},volume=${mix.voVolume},afade=t=in:d=0.2[${label}]`);
         mixLabels.push(`[${label}]`);
       }

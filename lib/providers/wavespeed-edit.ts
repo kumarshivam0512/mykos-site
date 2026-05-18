@@ -156,7 +156,9 @@ export async function generateImageWithRefs(
   characterSheet?: string,
   realism?: RealismSettings,
   /** Which subject is the hero of the frame. Defaults to "auto" (inferred from adFormat). */
-  hero: HeroSubject = "auto"
+  hero: HeroSubject = "auto",
+  /** Aspect ratio — drives composition cues in the prompt. */
+  aspectRatioHint?: "16:9" | "9:16" | "1:1" | "4:5"
 ): Promise<WaveSpeedResult> {
   const resolvedHero = resolveHero(hero, adFormat);
   const refUrls = collectReferenceUrls(refs, resolvedHero);
@@ -164,7 +166,7 @@ export async function generateImageWithRefs(
     throw new Error("generateImageWithRefs requires at least one reference image URL");
   }
 
-  const basePrompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, true, sceneBackdrop, characterSheet, realism);
+  const basePrompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, true, sceneBackdrop, characterSheet, realism, aspectRatioHint);
   const promptWithRefs = buildMultiRefPrompt(basePrompt, refs, refUrls, resolvedHero);
   const prompt = optimizePromptForModel(promptWithRefs, EDIT_TIER_TARGET[tier], realism);
   const modelId = EDIT_TIER_MODELS[tier];

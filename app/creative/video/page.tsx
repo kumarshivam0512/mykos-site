@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { estimatePreflightCost, formatDuration } from "@/lib/providers/tier-selector";
+import { ASPECT_RATIO_CLASS } from "@/lib/types";
 
 // Camera moves the user can choose per scene (maps to prompt engine NAMED_MOVES)
 const CAMERA_MOVES = [
@@ -56,7 +57,7 @@ interface SceneMotion {
 }
 
 export default function VideoStudioPage() {
-  const { assets, brief, brandKit, productInput, setAssets, selectedTier, setTier } = useAdStore();
+  const { assets, brief, brandKit, productInput, setAssets, selectedTier, setTier, selectedAspectRatio } = useAdStore();
   const scenes = assets.images || [];
   const sourceUrls = assets.sourceUrls || [];
 
@@ -81,6 +82,11 @@ export default function VideoStudioPage() {
   // Voiceover state
   const [generatingVoiceover, setGeneratingVoiceover] = useState(false);
   const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(assets.voiceoverUrl || null);
+
+  // Caption state (Sprint 2). Default: burn ON for vertical/square, OFF for landscape.
+  const [burnCaptions, setBurnCaptions] = useState<boolean>(selectedAspectRatio !== "16:9");
+  const [captionStyle, setCaptionStyle] = useState<"modern" | "tiktok" | "cinematic">("modern");
+  const [srtUrl, setSrtUrl] = useState<string | null>(null);
 
   const [error, setError] = useState("");
 
@@ -229,7 +235,7 @@ export default function VideoStudioPage() {
           scenes: apiScenes,
           sourceUrls: sourceUrls.length ? sourceUrls : undefined,
           tier: selectedTier,
-          aspectRatio: "16:9",
+          aspectRatio: selectedAspectRatio,
           duration: Math.max(...sceneMotions.map((m) => m.duration)),
           cameraSettings: brief?.cameraSettings,
           adFormat: brief?.adFormat,
@@ -341,6 +347,9 @@ export default function VideoStudioPage() {
           tier: selectedTier,
           adFormat: brief?.adFormat,
           useNativeAudio: selectedTier === "premium",
+          aspectRatio: selectedAspectRatio,
+          burnedCaptions: burnCaptions,
+          captionStyle,
         }),
       });
 
@@ -352,10 +361,13 @@ export default function VideoStudioPage() {
       const data = await res.json() as {
         videoUrl: string;
         voiceoverUrl?: string;
+        srtUrl?: string;
+        captionsBurned?: boolean;
         segments?: { sceneIndex: number; url: string }[];
       };
       setFinalVideo(data.videoUrl);
       if (data.voiceoverUrl) setVoiceoverUrl(data.voiceoverUrl);
+      if (data.srtUrl) setSrtUrl(data.srtUrl);
       setAssets({
         videoUrl: data.videoUrl,
         voiceoverUrl: data.voiceoverUrl,
@@ -588,18 +600,18 @@ export default function VideoStudioPage() {
                     {/* Source image preview */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl overflow-hidden border border-border">
-                        <img src={img} alt={`Scene ${idx + 1}`} className="w-full aspect-video object-cover" />
+                        <img src={img} alt={`Scene ${idx + 1}`} className={`w-full ${ASPECT_RATIO_CLASS[selectedAspectRatio]} object-cover`} />
                         <div className="px-3 py-1.5 text-xs text-muted-foreground bg-secondary/50">Source frame</div>
                       </div>
                       {clip ? (
                         <div className="rounded-xl overflow-hidden border border-border">
-                          <video src={clip} className="w-full aspect-video object-cover" controls muted />
+                          <video src={clip} className={`w-full ${ASPECT_RATIO_CLASS[selectedAspectRatio]} object-cover`} controls muted />
                           <div className="px-3 py-1.5 text-xs text-green-400 bg-secondary/50 flex items-center gap-1">
                             <Check className="w-3 h-3" /> Generated clip
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-dashed border-border flex items-center justify-center aspect-video">
+                        <div className={`rounded-xl border border-dashed border-border flex items-center justify-center ${ASPECT_RATIO_CLASS[selectedAspectRatio]}`}>
                           <span className="text-xs text-muted-foreground">Clip will appear here</span>
                         </div>
                       )}
@@ -724,29 +736,87 @@ export default function VideoStudioPage() {
             )}
           </button>
 
-          {/* Voiceover Generation (Optional) */}
+          {/* Voiceover preview — generated inline during assembly (Sprint 1 fix).
+              No standalone "Generate" button — finalize-video does it with
+              frame-perfect duration matching. This panel just previews the
+              script + latest VO audio if assembly has been run. */}
           {generatedClips.length > 0 && brief?.voiceoverScript && (
             <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-medium">Voiceover</h3>
-                  <p className="text-xs text-muted-foreground">From brief: &quot;{brief.voiceoverScript.slice(0, 80)}...&quot;</p>
+                  <p className="text-xs text-muted-foreground">
+                    {brief.voiceoverSegments?.length
+                      ? `${brief.voiceoverSegments.length} per-scene segments, paced to each clip's actual duration. Generated automatically on Assemble.`
+                      : `Single-line script · generated automatically on Assemble.`}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/80 mt-1 italic">&quot;{brief.voiceoverScript.slice(0, 120)}{brief.voiceoverScript.length > 120 ? "…" : ""}&quot;</p>
                 </div>
-                {voiceoverUrl ? (
-                  <span className="text-xs bg-green-500/10 text-green-400 px-2 py-1 rounded-full">Ready</span>
-                ) : null}
+                {voiceoverUrl && (
+                  <span className="text-xs bg-green-500/10 text-green-400 px-2 py-1 rounded-full whitespace-nowrap">Latest ready</span>
+                )}
               </div>
-              {voiceoverUrl ? (
+              {voiceoverUrl && (
                 <audio src={voiceoverUrl} controls className="w-full h-8" />
-              ) : (
-                <button onClick={handleGenerateVoiceover} disabled={generatingVoiceover}
-                  className="w-full bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
-                  {generatingVoiceover ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Generating voiceover...</>
-                  ) : (
-                    <>Generate Voiceover</>
-                  )}
-                </button>
+              )}
+            </div>
+          )}
+
+          {/* Captions (Sprint 2) — appears once clips are generated */}
+          {generatedClips.length > 0 && (
+            <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <Film className="w-4 h-4 text-primary" /> Captions
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Captioned video gets ~80% more watch-time on mobile feeds. A .srt sidecar is always written; turn on burn-in for TikTok / Reels / Stories where platforms don&apos;t show caption tracks.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={burnCaptions}
+                    onChange={(e) => setBurnCaptions(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  <span className="text-xs">Burn in</span>
+                </label>
+              </div>
+
+              {burnCaptions && (
+                <div>
+                  <label className="block text-[11px] text-muted-foreground mb-1.5">Style</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: "modern", label: "Modern", desc: "White + black outline" },
+                      { id: "tiktok", label: "TikTok", desc: "Yellow bold, centered" },
+                      { id: "cinematic", label: "Cinematic", desc: "Italic, lower-third bg" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setCaptionStyle(opt.id)}
+                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                          captionStyle === opt.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{opt.label}</div>
+                        <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {srtUrl && (
+                <a
+                  href={srtUrl}
+                  download
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download .srt
+                </a>
               )}
             </div>
           )}
@@ -758,7 +828,7 @@ export default function VideoStudioPage() {
               {assembling ? (
                 <><Loader2 className="w-5 h-5 animate-spin" /> Assembling final video...</>
               ) : (
-                <><Film className="w-5 h-5" /> Assemble Final Video ({generatedClips.length} clips{voiceoverUrl ? " + voiceover" : ""})</>
+                <><Film className="w-5 h-5" /> Assemble Final Video ({generatedClips.length} clips{voiceoverUrl ? " + voiceover" : ""}{burnCaptions ? " + captions" : ""})</>
               )}
             </button>
           )}
@@ -770,7 +840,18 @@ export default function VideoStudioPage() {
             <h3 className="text-sm font-medium flex items-center gap-2">
               <Play className="w-4 h-4 text-primary" /> Final Video
             </h3>
-            <div className="rounded-xl overflow-hidden border border-border">
+            {/* For vertical/square formats, cap the width so the player fits on screen.
+                Native <video> respects the file's intrinsic aspect — we just bound it. */}
+            <div
+              className="rounded-xl overflow-hidden border border-border mx-auto"
+              style={{
+                maxWidth:
+                  selectedAspectRatio === "9:16" ? 360 :
+                  selectedAspectRatio === "4:5" ? 480 :
+                  selectedAspectRatio === "1:1" ? 540 :
+                  "100%",
+              }}
+            >
               <video src={finalVideo} controls className="w-full" />
             </div>
             <a href={finalVideo}

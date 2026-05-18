@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { orchestrateImage } from "@/lib/providers/orchestrator";
 import type { RealismSettings } from "@/lib/prompts/prompt-engine";
-import type { Scene, BrandKit, QualityTier } from "@/lib/types";
+import type { Scene, BrandKit, QualityTier, AspectRatio } from "@/lib/types";
+import { ASPECT_RATIO_DIMENSIONS } from "@/lib/types";
 import { checkRateLimit, checkCostCap, recordCost, apiError, ERROR_CODES } from "@/lib/rate-limit";
 import { estimateCampaignCost } from "@/lib/providers/tier-selector";
 import sharp from "sharp";
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
       tier = "premium",
       existingImages,
       hero = "auto",
+      aspectRatio = "16:9",
     } = body as {
       scenes: SceneInput[];
       productName?: string;
@@ -85,6 +87,8 @@ export async function POST(req: NextRequest) {
       existingImages?: (string | null | undefined)[];
       /** Which subject is the hero of the frame. */
       hero?: "product" | "character" | "auto";
+      /** Aspect ratio for image generation — drives dimensions and prompt nudge. */
+      aspectRatio?: AspectRatio;
     };
 
     if (!scenes?.length) {
@@ -107,6 +111,9 @@ export async function POST(req: NextRequest) {
     // Resolve relative upload paths to absolute public URLs (WaveSpeed needs them)
     const publicLogoUrl = toPublicUrl(req, logoUrl);
     const publicProductUrls = productAngleUrls?.map((u) => toPublicUrl(req, u)).filter((u): u is string => !!u);
+
+    // Aspect-aware dimensions — single source of truth from lib/types.
+    const dims = ASPECT_RATIO_DIMENSIONS[aspectRatio] ?? ASPECT_RATIO_DIMENSIONS["16:9"];
 
     const images: ({ url: string; sourceUrl?: string; modelDescription?: string; estimatedCostUsd?: number } | null)[] =
       scenes.map((_, i) => {
@@ -135,8 +142,8 @@ export async function POST(req: NextRequest) {
           scene,
           brandKit,
           tier,
-          width: 1024,
-          height: 576,
+          width: dims.width,
+          height: dims.height,
           cameraSettings: { focalLength: "85mm", aperture: "f/2.0", colorGrade: sceneInput.colorGrade },
           adFormat,
           sceneBackdrop: effectiveBackdrop,
@@ -148,13 +155,14 @@ export async function POST(req: NextRequest) {
             characterRefUrl: publicCharacterRefUrl,
           },
           hero,
+          aspectRatio,
         });
 
         totalCostUsd += result.estimatedCostUsd;
 
-        // Save to disk
+        // Save to disk — resize to the aspect's target dimensions.
         const outputPath = path.join(OUTPUT_DIR, `scene_${i}.png`);
-        const finalBuffer = await sharp(result.buffer).resize(1024, 576, { fit: "cover" }).png().toBuffer();
+        const finalBuffer = await sharp(result.buffer).resize(dims.width, dims.height, { fit: "cover" }).png().toBuffer();
         await fs.writeFile(outputPath, finalBuffer);
 
         // Cache-bust the URL so the browser doesn't show a stale image when

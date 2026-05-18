@@ -140,6 +140,50 @@ export interface PipelineStatus {
 // ─── Quality Tier (user-selected per generation) ─────────────
 export type QualityTier = "budget" | "premium" | "ultra";
 
+// ─── Aspect ratio (user-selected per campaign) ───────────────
+// Drives image gen dimensions, video gen `aspect_ratio`, FFmpeg encode target,
+// caption positioning, and prompt nudges (composition language differs).
+export type AspectRatio = "16:9" | "9:16" | "1:1" | "4:5";
+
+/** Map aspect ratio to image generation dimensions (width × height in px). */
+export const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
+  "16:9": { width: 1024, height: 576 },   // YouTube pre-roll, landscape banner
+  "9:16": { width: 576, height: 1024 },   // Reels, TikTok, Stories, Shorts
+  "1:1":  { width: 1024, height: 1024 },  // Instagram feed, LinkedIn square
+  "4:5":  { width: 819, height: 1024 },   // Instagram feed (tall), Facebook
+};
+
+/** Map aspect ratio to FFmpeg encode target (always >= 720p on smaller side). */
+export const ASPECT_RATIO_VIDEO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
+  "16:9": { width: 1280, height: 720 },
+  "9:16": { width: 720,  height: 1280 },
+  "1:1":  { width: 1080, height: 1080 },
+  "4:5":  { width: 864,  height: 1080 },
+};
+
+/** UI labels with platform hints. */
+export const ASPECT_RATIO_LABELS: Record<AspectRatio, { label: string; sub: string }> = {
+  "16:9": { label: "16:9", sub: "YouTube · landscape" },
+  "9:16": { label: "9:16", sub: "Reels · TikTok · Shorts" },
+  "1:1":  { label: "1:1",  sub: "Feed · square" },
+  "4:5":  { label: "4:5",  sub: "Feed · tall" },
+};
+
+/** Tailwind aspect-ratio class per AspectRatio — for previewing scene images
+ *  and clips with the correct frame shape in the UI. */
+export const ASPECT_RATIO_CLASS: Record<AspectRatio, string> = {
+  "16:9": "aspect-video",      // 16/9 — Tailwind built-in
+  "9:16": "aspect-[9/16]",
+  "1:1":  "aspect-square",     // 1/1 — Tailwind built-in
+  "4:5":  "aspect-[4/5]",
+};
+
+/** Type-guard / normalizer — clamps unknown strings to a valid AspectRatio. */
+export function toAspectRatio(value: string | undefined | null): AspectRatio {
+  if (value === "9:16" || value === "1:1" || value === "4:5") return value;
+  return "16:9";
+}
+
 // ─── Generated Assets ───────────────────────────────────────
 export interface GeneratedAssets {
   images: string[];

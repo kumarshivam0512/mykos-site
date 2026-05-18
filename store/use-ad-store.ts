@@ -9,6 +9,7 @@ import type {
   PipelineStep,
   VideoMode,
   QualityTier,
+  AspectRatio,
 } from "@/lib/types";
 
 interface AdStore {
@@ -18,7 +19,7 @@ interface AdStore {
   brief: CreativeBrief | null;
   assets: GeneratedAssets;
   pipeline: PipelineStatus;
-  selectedAspectRatio: string;
+  selectedAspectRatio: AspectRatio;
   videoMode: VideoMode;
   /** Currently selected quality tier — drives WaveSpeed model routing. */
   selectedTier: QualityTier;
@@ -32,7 +33,7 @@ interface AdStore {
   setPipelineStep: (step: PipelineStep, message?: string) => void;
   setPipelineProgress: (progress: number) => void;
   setPipelineError: (error: string) => void;
-  setAspectRatio: (ratio: string) => void;
+  setAspectRatio: (ratio: AspectRatio) => void;
   setVideoMode: (mode: VideoMode) => void;
   setTier: (tier: QualityTier) => void;
   reset: () => void;
@@ -44,7 +45,7 @@ const initialState = {
   brief: null,
   assets: { images: [], variants: [] },
   pipeline: { step: "idle" as PipelineStep, progress: 0, message: "" },
-  selectedAspectRatio: "16:9",
+  selectedAspectRatio: "16:9" as AspectRatio,
   videoMode: "slideshow" as VideoMode,
   selectedTier: "premium" as QualityTier,
 };

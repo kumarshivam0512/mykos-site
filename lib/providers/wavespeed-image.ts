@@ -46,9 +46,11 @@ export async function generateImageWaveSpeed(
   hasProductImage?: boolean,
   sceneBackdrop?: string,
   characterSheet?: string,
-  realism?: RealismSettings
+  realism?: RealismSettings,
+  /** Aspect ratio — passes through to the prompt for composition cues. */
+  aspectRatioHint?: "16:9" | "9:16" | "1:1" | "4:5"
 ): Promise<WaveSpeedResult> {
-  const basePrompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
+  const basePrompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism, aspectRatioHint);
   const prompt = optimizePromptForModel(basePrompt, IMAGE_TIER_TARGET[tier], realism);
   const modelId = IMAGE_TIER_MODELS[tier];
   const aspectRatio = aspectRatioFromDimensions(width, height, ASPECT_RATIO_ALLOW[modelId]);

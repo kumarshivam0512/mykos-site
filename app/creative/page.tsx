@@ -8,6 +8,7 @@ import type { Location } from "@/lib/db/locations";
 import { QualityTierSelector } from "@/components/quality-tier-selector";
 import { AD_TYPE_LABELS, type AdType } from "@/lib/templates/golden-templates";
 import { estimatePreflightCost, formatDuration } from "@/lib/providers/tier-selector";
+import { ASPECT_RATIO_LABELS, ASPECT_RATIO_CLASS, type AspectRatio } from "@/lib/types";
 import {
   Palette,
   Plus,
@@ -230,7 +231,7 @@ function MentionField({ value, onChange, placeholder, rows, mentionType, items, 
 
 export default function SceneBuilderPage() {
   const router = useRouter();
-  const { productInput, brandKit, brief, setAssets, selectedTier, setTier, updateBrief, setBrief } = useAdStore();
+  const { productInput, brandKit, brief, setAssets, selectedTier, setTier, updateBrief, setBrief, selectedAspectRatio, setAspectRatio } = useAdStore();
 
   const [scenes, setScenes] = useState<SceneInput[]>([createEmptyScene()]);
   const [expandedScene, setExpandedScene] = useState<string | null>(scenes[0]?.id);
@@ -492,6 +493,7 @@ export default function SceneBuilderPage() {
           tier: selectedTier,
           existingImages,
           hero,
+          aspectRatio: selectedAspectRatio,
         }),
       });
 
@@ -681,6 +683,41 @@ export default function SceneBuilderPage() {
                   <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Aspect ratio picker — drives image dimensions + video aspect + caption positioning */}
+          <div className="pt-3 border-t border-border">
+            <label className="block text-xs text-muted-foreground mb-1.5">
+              Aspect ratio <span className="text-muted-foreground/60">— platform format</span>
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.entries(ASPECT_RATIO_LABELS) as Array<[AspectRatio, { label: string; sub: string }]>).map(([ratio, info]) => {
+                const isActive = selectedAspectRatio === ratio;
+                // Visual aspect-shape preview using a div with the right proportions
+                const [w, h] = ratio.split(":").map(Number);
+                const previewMaxH = 20;
+                const previewH = Math.min(previewMaxH, previewMaxH * (h / Math.max(w, h)));
+                const previewW = previewMaxH * (w / Math.max(w, h));
+                return (
+                  <button
+                    key={ratio}
+                    onClick={() => setAspectRatio(ratio)}
+                    className={`rounded-xl border px-3 py-2 text-left transition-colors flex items-center gap-2 ${
+                      isActive ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"
+                    }`}
+                  >
+                    <div
+                      className={`shrink-0 rounded border ${isActive ? "border-primary/60 bg-primary/30" : "border-muted-foreground/40 bg-muted-foreground/10"}`}
+                      style={{ width: `${previewW}px`, height: `${previewH}px` }}
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium">{info.label}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{info.sub}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -920,8 +957,8 @@ export default function SceneBuilderPage() {
                     {/* Generated Image Preview */}
                     {generatedImg && (
                       <div className="space-y-2">
-                        <div className="rounded-xl overflow-hidden border border-border">
-                          <img src={generatedImg.url} alt={`Scene ${idx + 1}`} className="w-full aspect-video object-cover" />
+                        <div className="rounded-xl overflow-hidden border border-border max-w-xs mx-auto">
+                          <img src={generatedImg.url} alt={`Scene ${idx + 1}`} className={`w-full ${ASPECT_RATIO_CLASS[selectedAspectRatio]} object-cover`} />
                         </div>
                         <button
                           onClick={() => regenerateScene(scene.id)}

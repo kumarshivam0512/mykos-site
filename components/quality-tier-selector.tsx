@@ -32,7 +32,7 @@ const TIERS: TierOption[] = [
     label: "Premium",
     icon: <Sparkles className="w-4 h-4" />,
     imageModel: "Nano Banana 2",
-    videoModel: "Kling 3.0 Std",
+    videoModel: "Kling v2.5 Turbo Pro",
     perScene: "$0.07",
     per5SecClip: "$0.42",
     bestFor: "Production ads — photoreal, character consistency, native audio",

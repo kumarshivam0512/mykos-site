@@ -46,6 +46,8 @@ export interface OrchestrateImageParams {
   inputs?: AvailableInputs;
   /** Which subject is the hero of the frame ("product" | "character" | "auto"). */
   hero?: "product" | "character" | "auto";
+  /** Aspect ratio of the target frame — drives prompt composition language. */
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5";
 }
 
 /**
@@ -59,6 +61,7 @@ export async function orchestrateImage(params: OrchestrateImageParams): Promise<
     cameraSettings, adFormat, sceneBackdrop, characterSheet, realism,
     inputs = {},
     hero = "auto",
+    aspectRatio = "16:9",
   } = params;
 
   const selection = selectImageModel(tier, inputs);
@@ -86,7 +89,7 @@ export async function orchestrateImage(params: OrchestrateImageParams): Promise<
           scene, brandKit, tier, refs,
           width, height, cameraSettings, adFormat,
           sceneBackdrop, characterSheet, realism,
-          hero
+          hero, aspectRatio
         );
         return { ...result, modelDescription: selection.description, estimatedCostUsd: selection.estimatedCostUsd };
       }
@@ -96,7 +99,8 @@ export async function orchestrateImage(params: OrchestrateImageParams): Promise<
       const result = await generateImageWaveSpeed(
         scene, brandKit, tier,
         width, height, cameraSettings, adFormat,
-        hasProductImage, sceneBackdrop, characterSheet, realism
+        hasProductImage, sceneBackdrop, characterSheet, realism,
+        aspectRatio
       );
       return { ...result, modelDescription: selection.description, estimatedCostUsd: selection.estimatedCostUsd };
     } catch (err) {

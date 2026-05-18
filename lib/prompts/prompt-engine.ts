@@ -108,13 +108,28 @@ export function buildImagePrompt(
   hasProductImage?: boolean,
   sceneBackdrop?: string,
   characterSheet?: string,
-  realism?: RealismSettings
+  realism?: RealismSettings,
+  /** Aspect ratio of the target frame — drives composition language so vertical
+   *  outputs aren't just cropped landscapes. */
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:5"
 ): string {
   const lines: string[] = [];
   const isAnimated = adFormat === "animated_explainer";
 
   // 1. Image type / medium (FRONT-LOADED — highest weight)
   lines.push(FORMAT_IMAGE_TYPE[adFormat || "cinematic_lifestyle"] || "professional commercial photography");
+
+  // 1a. Aspect-aware composition cue (BEFORE subject — heavy weight).
+  // Models compose differently for vertical / square / landscape. Without this
+  // they default to landscape composition and the subject gets cropped on 9:16.
+  if (aspectRatio === "9:16") {
+    lines.push("vertical 9:16 composition for mobile / Reels / TikTok / Shorts: portrait orientation, subject centred and full-body or head-and-shoulders, important elements in the central vertical strip, generous safe area top and bottom for captions and UI");
+  } else if (aspectRatio === "1:1") {
+    lines.push("square 1:1 composition for Instagram feed: subject centred, balanced composition with equal weight on all sides, no important elements at the very edges");
+  } else if (aspectRatio === "4:5") {
+    lines.push("vertical 4:5 composition for Facebook / Instagram tall feed: portrait orientation with slightly more headroom than 9:16, subject centred");
+  }
+  // 16:9 is the model default — no extra cue needed.
 
   // 2. Subject (character + product interaction from scene)
   if (characterSheet) {
