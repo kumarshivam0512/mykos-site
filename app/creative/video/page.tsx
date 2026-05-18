@@ -20,6 +20,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
+import { estimatePreflightCost, formatDuration } from "@/lib/providers/tier-selector";
 
 // Camera moves the user can choose per scene (maps to prompt engine NAMED_MOVES)
 const CAMERA_MOVES = [
@@ -323,34 +324,43 @@ export default function VideoStudioPage() {
     setError("");
 
     try {
-      const res = await fetch("/api/assemble", {
+      // Sprint 1 fix: use the unified /api/finalize-video endpoint that
+      // probes real clip durations FIRST, then generates voiceover paced to
+      // those exact durations, then assembles. Eliminates VO drift.
+      const res = await fetch("/api/finalize-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           videoClips: generatedClips,
-          durations: sceneMotions.map((m) => m.duration),
-          voiceoverUrl: voiceoverUrl || assets.voiceoverUrl || undefined,
-          // Phase 2: per-scene voiceover segments — each is delayed to its
-          // scene offset in the final mix.
-          voiceoverSegments: assets.voiceoverSegments,
-          // Tier drives codec preset / CRF / audio bitrate; adFormat drives
-          // voice-vs-music mix so luxury content sounds different from UGC.
+          plannedDurations: sceneMotions.map((m) => m.duration),
+          // Pass segments (if available from idea-to-scenes) so each scene's
+          // VO is paced to its CLIP's actual duration, not the planned one.
+          voiceoverSegments: brief?.voiceoverSegments,
+          voiceoverScript: brief?.voiceoverScript,
+          musicDirection: brief?.musicDirection || "professional",
           tier: selectedTier,
           adFormat: brief?.adFormat,
-          // Phase 3: keep model-native ambient audio (Kling v2.5 only); silent
-          // models (Seedance / Wan) ignore this. Default ON for Premium tier.
           useNativeAudio: selectedTier === "premium",
         }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to assemble video");
+        throw new Error(data.error || "Failed to finalize video");
       }
 
-      const data = await res.json();
+      const data = await res.json() as {
+        videoUrl: string;
+        voiceoverUrl?: string;
+        segments?: { sceneIndex: number; url: string }[];
+      };
       setFinalVideo(data.videoUrl);
-      setAssets({ videoUrl: data.videoUrl });
+      if (data.voiceoverUrl) setVoiceoverUrl(data.voiceoverUrl);
+      setAssets({
+        videoUrl: data.videoUrl,
+        voiceoverUrl: data.voiceoverUrl,
+        voiceoverSegments: data.segments,
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -666,6 +676,35 @@ export default function VideoStudioPage() {
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>
         )}
+
+        {/* Cost preview — exact $ and ETA before user clicks Generate Clips */}
+        {(() => {
+          const hasRefs = !!brandKit.logoUrl || !!(assets.productAngleUrls?.length) || !!(assets.characterRefUrls?.some(Boolean));
+          const preflight = estimatePreflightCost({
+            tier: selectedTier,
+            imageSceneCount: 0, // images already exist when on this page
+            hasRefs,
+            videoDurations: sceneMotions.map((m) => m.duration),
+          });
+          return (
+            <div className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center justify-between">
+              <div className="text-xs space-y-0.5">
+                <div className="flex items-center gap-3">
+                  <span className="text-muted-foreground">Estimated cost:</span>
+                  <span className="font-semibold text-foreground">${preflight.totalUsd.toFixed(2)}</span>
+                  <span className="text-muted-foreground/60">·</span>
+                  <span className="text-muted-foreground">~{formatDuration(preflight.estimatedSeconds)}</span>
+                </div>
+                {preflight.lines[0] && (
+                  <div className="text-[10px] text-muted-foreground/80">{preflight.lines.join("  ·  ")}</div>
+                )}
+              </div>
+              <div className="text-[10px] text-muted-foreground/60">
+                tier: <span className="text-primary/80 uppercase">{selectedTier}</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ─── Action Buttons ──────────────────────────────────── */}
         <div className="space-y-3">

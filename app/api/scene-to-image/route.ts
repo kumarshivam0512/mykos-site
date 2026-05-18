@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
       productAngleUrls,
       tier = "premium",
       existingImages,
+      hero = "auto",
     } = body as {
       scenes: SceneInput[];
       productName?: string;
@@ -82,6 +83,8 @@ export async function POST(req: NextRequest) {
       tier?: QualityTier;
       /** Existing image URLs from a previous (possibly partial) run. Indices with a non-empty entry are skipped. */
       existingImages?: (string | null | undefined)[];
+      /** Which subject is the hero of the frame. */
+      hero?: "product" | "character" | "auto";
     };
 
     if (!scenes?.length) {
@@ -144,6 +147,7 @@ export async function POST(req: NextRequest) {
             logoUrl: publicLogoUrl,
             characterRefUrl: publicCharacterRefUrl,
           },
+          hero,
         });
 
         totalCostUsd += result.estimatedCostUsd;

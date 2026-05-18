@@ -44,6 +44,8 @@ export interface OrchestrateImageParams {
   characterSheet?: string;
   realism?: RealismSettings;
   inputs?: AvailableInputs;
+  /** Which subject is the hero of the frame ("product" | "character" | "auto"). */
+  hero?: "product" | "character" | "auto";
 }
 
 /**
@@ -56,6 +58,7 @@ export async function orchestrateImage(params: OrchestrateImageParams): Promise<
     width = 1024, height = 576,
     cameraSettings, adFormat, sceneBackdrop, characterSheet, realism,
     inputs = {},
+    hero = "auto",
   } = params;
 
   const selection = selectImageModel(tier, inputs);
@@ -82,7 +85,8 @@ export async function orchestrateImage(params: OrchestrateImageParams): Promise<
         const result = await generateImageWithRefs(
           scene, brandKit, tier, refs,
           width, height, cameraSettings, adFormat,
-          sceneBackdrop, characterSheet, realism
+          sceneBackdrop, characterSheet, realism,
+          hero
         );
         return { ...result, modelDescription: selection.description, estimatedCostUsd: selection.estimatedCostUsd };
       }

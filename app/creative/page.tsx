@@ -7,6 +7,7 @@ import type { Character } from "@/lib/db/characters";
 import type { Location } from "@/lib/db/locations";
 import { QualityTierSelector } from "@/components/quality-tier-selector";
 import { AD_TYPE_LABELS, type AdType } from "@/lib/templates/golden-templates";
+import { estimatePreflightCost, formatDuration } from "@/lib/providers/tier-selector";
 import {
   Palette,
   Plus,
@@ -241,6 +242,9 @@ export default function SceneBuilderPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [realismPreset, setRealismPreset] = useState<string>("photo");
   const [realism, setRealism] = useState<RealismSettings>(REALISM_DEFAULTS);
+  // Hero subject — drives reference-image ordering and prompt composition.
+  // "auto" picks product for product_showcase/minimalist_editorial, character otherwise.
+  const [hero, setHero] = useState<"auto" | "product" | "character">("auto");
   const [showRealismAdvanced, setShowRealismAdvanced] = useState(false);
 
   // Library data for @ mentions
@@ -405,6 +409,17 @@ export default function SceneBuilderPage() {
     setScenes(scenes.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   };
 
+  /**
+   * Regenerate just this one scene's image. Drops the existing image so the
+   * resume logic in /api/scene-to-image skips every OTHER scene and only
+   * re-runs this one — fast, cheap, no full-batch redo.
+   */
+  const regenerateScene = (id: string) => {
+    setGeneratedImages((prev) => prev.filter((g) => g.sceneId !== id));
+    // Defer the generate call by one tick so the state update lands first.
+    setTimeout(() => { generateSceneImages(); }, 0);
+  };
+
   const generateSceneImages = useCallback(async () => {
     if (!productInput.name) {
       setError("Set up your brand first in the Brand Hub");
@@ -476,6 +491,7 @@ export default function SceneBuilderPage() {
           productAngleUrls: angleUrls.length > 0 ? angleUrls : undefined,
           tier: selectedTier,
           existingImages,
+          hero,
         }),
       });
 
@@ -640,8 +656,33 @@ export default function SceneBuilderPage() {
         </div>
 
         {/* Quality Tier Selector */}
-        <div className="bg-card border border-border rounded-2xl p-5">
+        <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
           <QualityTierSelector value={selectedTier} onChange={setTier} />
+
+          {/* Hero subject pill — drives reference ordering and prompt composition */}
+          <div className="pt-3 border-t border-border">
+            <label className="block text-xs text-muted-foreground mb-1.5">
+              Hero subject <span className="text-muted-foreground/60">— who/what is the main focus of each frame?</span>
+            </label>
+            <div className="flex gap-2">
+              {([
+                { id: "auto", label: "Auto", desc: "Inferred from ad type" },
+                { id: "product", label: "Product", desc: "Product is centred, character is supporting" },
+                { id: "character", label: "Character", desc: "Character is centred, product is supporting" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setHero(opt.id)}
+                  className={`flex-1 rounded-xl border px-3 py-2 text-left transition-colors ${
+                    hero === opt.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"
+                  }`}
+                >
+                  <div className="text-xs font-medium">{opt.label}</div>
+                  <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Ultra-Realism Panel */}
@@ -878,8 +919,22 @@ export default function SceneBuilderPage() {
 
                     {/* Generated Image Preview */}
                     {generatedImg && (
-                      <div className="rounded-xl overflow-hidden border border-border">
-                        <img src={generatedImg.url} alt={`Scene ${idx + 1}`} className="w-full aspect-video object-cover" />
+                      <div className="space-y-2">
+                        <div className="rounded-xl overflow-hidden border border-border">
+                          <img src={generatedImg.url} alt={`Scene ${idx + 1}`} className="w-full aspect-video object-cover" />
+                        </div>
+                        <button
+                          onClick={() => regenerateScene(scene.id)}
+                          disabled={generating}
+                          className="w-full bg-secondary hover:bg-secondary/80 disabled:opacity-50 text-foreground text-xs font-medium py-2 rounded-lg flex items-center justify-center gap-1.5"
+                          title="Regenerate only this scene (other scenes won't be touched)"
+                        >
+                          {generating ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Regenerating…</>
+                          ) : (
+                            <><Sparkles className="w-3.5 h-3.5" /> Regenerate this scene only</>
+                          )}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -899,6 +954,34 @@ export default function SceneBuilderPage() {
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>
         )}
+
+        {/* Cost preview — exact $ and ETA before user clicks Generate */}
+        {(() => {
+          const hasRefs = !!brandKit.logoUrl || productAngles.length > 0 || !!productImage || scenes.some((s) => s.characterRefUrl);
+          const preflight = estimatePreflightCost({
+            tier: selectedTier,
+            imageSceneCount: scenes.length,
+            hasRefs,
+          });
+          return (
+            <div className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center justify-between">
+              <div className="text-xs space-y-0.5">
+                <div className="flex items-center gap-3">
+                  <span className="text-muted-foreground">Estimated cost:</span>
+                  <span className="font-semibold text-foreground">${preflight.totalUsd.toFixed(2)}</span>
+                  <span className="text-muted-foreground/60">·</span>
+                  <span className="text-muted-foreground">~{formatDuration(preflight.estimatedSeconds)}</span>
+                </div>
+                {preflight.lines[0] && (
+                  <div className="text-[10px] text-muted-foreground/80">{preflight.lines[0]}</div>
+                )}
+              </div>
+              <div className="text-[10px] text-muted-foreground/60">
+                tier: <span className="text-primary/80 uppercase">{selectedTier}</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Generate Button */}
         <button onClick={generateSceneImages} disabled={generating}

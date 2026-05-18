@@ -50,48 +50,97 @@ export interface MultiRefInputs {
 }
 
 /**
- * Collect all reference image URLs into a single ordered array.
- * Order matters: character first (face is highest priority), then product, then logo.
- * Nano Banana models accept up to ~6 reference images.
+ * Which subject is the hero of the frame. Drives:
+ *   1. Reference image ordering (Nano Banana models weight earlier refs more)
+ *   2. Prompt guidance language (the model is told which subject to centre)
+ *
+ * Default is "auto" — inferred from adFormat (product_showcase → product,
+ * everything else → character).
  */
-export function collectReferenceUrls(refs: MultiRefInputs): string[] {
-  const urls: string[] = [];
-  if (refs.characterRefUrl) urls.push(refs.characterRefUrl);
-  if (refs.productImageUrls?.length) urls.push(...refs.productImageUrls.slice(0, 3));
-  if (refs.logoUrl) urls.push(refs.logoUrl);
-  if (refs.extraRefUrls?.length) urls.push(...refs.extraRefUrls.slice(0, 2));
-  return urls.slice(0, 6); // models typically cap at 6
+export type HeroSubject = "product" | "character" | "auto";
+
+/** Resolve "auto" to a concrete hero based on the ad format. */
+function resolveHero(hero: HeroSubject, adFormat?: AdFormat): "product" | "character" {
+  if (hero !== "auto") return hero;
+  // Product-led formats: the product IS the hero, character is secondary.
+  if (adFormat === "product_showcase" || adFormat === "minimalist_editorial") return "product";
+  // Everything else (cinematic, sports, testimonial, explainer) leads with character.
+  return "character";
 }
 
 /**
- * Build a prompt that instructs the AI how to use the references.
- * This augments the standard image prompt with explicit reference guidance.
+ * Collect all reference image URLs into a single ordered array.
+ * Order matters — Nano Banana / Seedream models weight the FIRST reference
+ * most heavily. So we put the hero subject's reference first.
+ *
+ * - hero=character: [character, product1-3, logo, extras] (the classic flow)
+ * - hero=product:   [product1-3, character, logo, extras] (luxury, hero product)
+ *
+ * Nano Banana caps at ~6 references total.
+ */
+export function collectReferenceUrls(refs: MultiRefInputs, hero: "product" | "character" = "character"): string[] {
+  const urls: string[] = [];
+  if (hero === "product") {
+    if (refs.productImageUrls?.length) urls.push(...refs.productImageUrls.slice(0, 3));
+    if (refs.characterRefUrl) urls.push(refs.characterRefUrl);
+  } else {
+    if (refs.characterRefUrl) urls.push(refs.characterRefUrl);
+    if (refs.productImageUrls?.length) urls.push(...refs.productImageUrls.slice(0, 3));
+  }
+  if (refs.logoUrl) urls.push(refs.logoUrl);
+  if (refs.extraRefUrls?.length) urls.push(...refs.extraRefUrls.slice(0, 2));
+  return urls.slice(0, 6);
+}
+
+/**
+ * Build a prompt that instructs the AI how to use the references AND which
+ * subject is the hero of the frame. The hero gets dominant framing, the
+ * other subjects appear in supporting roles.
  */
 function buildMultiRefPrompt(
   basePrompt: string,
   refs: MultiRefInputs,
-  refUrls: string[]
+  refUrls: string[],
+  hero: "product" | "character"
 ): string {
   if (refUrls.length === 0) return basePrompt;
 
   const guidance: string[] = [];
   let refIndex = 0;
 
-  if (refs.characterRefUrl) {
-    guidance.push(`Reference image ${refIndex + 1} is the character — preserve their face, hair, and overall appearance exactly`);
-    refIndex++;
-  }
-  if (refs.productImageUrls?.length) {
-    const count = refs.productImageUrls.slice(0, 3).length;
-    guidance.push(`Reference image${count > 1 ? "s" : ""} ${refIndex + 1}${count > 1 ? `-${refIndex + count}` : ""} show the actual product — render it exactly as shown, preserving shape, color, branding, and proportions`);
-    refIndex += count;
+  // Build the per-reference guidance in the same order as refUrls.
+  if (hero === "product") {
+    if (refs.productImageUrls?.length) {
+      const count = refs.productImageUrls.slice(0, 3).length;
+      guidance.push(`Reference image${count > 1 ? "s" : ""} ${refIndex + 1}${count > 1 ? `-${refIndex + count}` : ""} show the PRODUCT — this is the HERO of the frame. Render it large, centred, and fully visible. Preserve shape, color, branding, and proportions exactly`);
+      refIndex += count;
+    }
+    if (refs.characterRefUrl) {
+      guidance.push(`Reference image ${refIndex + 1} is the character — they are a SECONDARY subject. Show them interacting with or beside the product, but do NOT crop or obscure the product. Preserve their face and appearance`);
+      refIndex++;
+    }
+  } else {
+    if (refs.characterRefUrl) {
+      guidance.push(`Reference image ${refIndex + 1} is the character — preserve their face, hair, and overall appearance exactly`);
+      refIndex++;
+    }
+    if (refs.productImageUrls?.length) {
+      const count = refs.productImageUrls.slice(0, 3).length;
+      guidance.push(`Reference image${count > 1 ? "s" : ""} ${refIndex + 1}${count > 1 ? `-${refIndex + count}` : ""} show the actual product — render it exactly as shown, preserving shape, color, branding, and proportions`);
+      refIndex += count;
+    }
   }
   if (refs.logoUrl) {
     guidance.push(`Reference image ${refIndex + 1} is the brand logo — place it naturally in the scene (corner or on packaging) without distortion`);
     refIndex++;
   }
 
-  return `${basePrompt}\n\nReference guidance: ${guidance.join("; ")}.`;
+  // Add a hero-emphasis prefix so the model centres the right subject.
+  const heroPrefix = hero === "product"
+    ? "Composition: the PRODUCT is the visual hero of this frame — it should be the largest, most prominent, and clearly readable subject. The character (if any) is in a supporting role."
+    : "Composition: the CHARACTER is the focus of this frame, with the product visible but not dominating.";
+
+  return `${basePrompt}\n\n${heroPrefix}\n\nReference guidance: ${guidance.join("; ")}.`;
 }
 
 export async function generateImageWithRefs(
@@ -105,15 +154,18 @@ export async function generateImageWithRefs(
   adFormat?: AdFormat,
   sceneBackdrop?: string,
   characterSheet?: string,
-  realism?: RealismSettings
+  realism?: RealismSettings,
+  /** Which subject is the hero of the frame. Defaults to "auto" (inferred from adFormat). */
+  hero: HeroSubject = "auto"
 ): Promise<WaveSpeedResult> {
-  const refUrls = collectReferenceUrls(refs);
+  const resolvedHero = resolveHero(hero, adFormat);
+  const refUrls = collectReferenceUrls(refs, resolvedHero);
   if (refUrls.length === 0) {
     throw new Error("generateImageWithRefs requires at least one reference image URL");
   }
 
   const basePrompt = buildImagePrompt(scene, brandKit, cameraSettings, adFormat, true, sceneBackdrop, characterSheet, realism);
-  const promptWithRefs = buildMultiRefPrompt(basePrompt, refs, refUrls);
+  const promptWithRefs = buildMultiRefPrompt(basePrompt, refs, refUrls, resolvedHero);
   const prompt = optimizePromptForModel(promptWithRefs, EDIT_TIER_TARGET[tier], realism);
   const modelId = EDIT_TIER_MODELS[tier];
   const aspectRatio = aspectRatioFromDimensions(width, height, ASPECT_RATIO_ALLOW[modelId]);

@@ -168,3 +168,88 @@ export function estimateCampaignCost(tier: QualityTier): CampaignCostEstimate {
   const typicalCampaign = perImage * 3 + perVideoSecond * 15;
   return { perImage, perImageWithRefs, perVideoSecond, per5SecClipWithRefs, typicalCampaign };
 }
+
+// ─── Precise pre-flight cost estimator ─────────────────────────────────
+// Used by the UI's "Cost preview before generate" panel to show the user
+// exactly what they're about to spend BEFORE clicking generate. Eliminates
+// the #1 anxiety in the product.
+
+export interface PreflightCostBreakdown {
+  /** Sum of per-scene image costs. */
+  imagesUsd: number;
+  /** Sum of per-scene video costs (only filled when including video). */
+  videoUsd: number;
+  /** Voiceover + assembly cost (Gemini TTS is free up to quota; FFmpeg = 0). */
+  audioUsd: number;
+  /** Total — what the user pays for the whole flow. */
+  totalUsd: number;
+  /** Time estimate in seconds (best-case). */
+  estimatedSeconds: number;
+  /** Human-readable breakdown lines for the UI. */
+  lines: string[];
+}
+
+export interface PreflightCostParams {
+  tier: QualityTier;
+  /** Number of scenes the user will generate images for. */
+  imageSceneCount: number;
+  /** True if any reference image is attached (logo / product / character). Adds ~$0.05 on Premium/Ultra. */
+  hasRefs: boolean;
+  /** Optional: include video-clip cost. Pass `videoDurations` array. */
+  videoDurations?: number[];
+}
+
+/**
+ * Compute the precise cost of a scene-image-only run, or a full image+video+audio
+ * run, based on the user's tier and scene count.
+ *
+ * Image times: ~70s/scene Ultra, ~45s Premium, ~15s Budget.
+ * Video times: ~75s/clip Ultra (Seedance 2.0), ~65s Premium (Kling), ~25s Budget (Wan).
+ * Audio: ~5s per voiceover segment + ~10s assembly.
+ */
+export function estimatePreflightCost(params: PreflightCostParams): PreflightCostBreakdown {
+  const { tier, imageSceneCount, hasRefs, videoDurations } = params;
+  const costEst = estimateCampaignCost(tier);
+  const lines: string[] = [];
+
+  // Images
+  const perImage = hasRefs ? costEst.perImageWithRefs : costEst.perImage;
+  const imagesUsd = perImage * imageSceneCount;
+  if (imageSceneCount > 0) {
+    lines.push(`${imageSceneCount}× scene image${imageSceneCount > 1 ? "s" : ""}${hasRefs ? " (with refs)" : ""} · $${perImage.toFixed(3)} each = $${imagesUsd.toFixed(2)}`);
+  }
+
+  // Video
+  let videoUsd = 0;
+  if (videoDurations?.length) {
+    const totalSeconds = videoDurations.reduce((s, d) => s + (d || 5), 0);
+    videoUsd = costEst.perVideoSecond * totalSeconds;
+    lines.push(`${videoDurations.length}× video clip${videoDurations.length > 1 ? "s" : ""} (${totalSeconds}s total) · $${costEst.perVideoSecond.toFixed(3)}/s = $${videoUsd.toFixed(2)}`);
+  }
+
+  // Audio (voiceover + assembly are effectively free at current Gemini TTS quotas)
+  const audioUsd = 0;
+  if (videoDurations?.length) {
+    lines.push(`Voiceover + assembly · included`);
+  }
+
+  const totalUsd = imagesUsd + videoUsd + audioUsd;
+
+  // Time estimates
+  const imageSecsPerScene = { budget: 15, premium: 45, ultra: 70 }[tier];
+  const videoSecsPerClip = { budget: 25, premium: 65, ultra: 75 }[tier];
+  const imageTime = imageSceneCount * imageSecsPerScene;
+  const videoTime = (videoDurations?.length ?? 0) * videoSecsPerClip;
+  const audioTime = videoDurations?.length ? videoDurations.length * 22 + 15 : 0; // 22s per VO segment + 15s assembly
+  const estimatedSeconds = imageTime + videoTime + audioTime;
+
+  return { imagesUsd, videoUsd, audioUsd, totalUsd, estimatedSeconds, lines };
+}
+
+/** Format seconds as "1m 45s" or "45s". */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
