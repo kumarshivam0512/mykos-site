@@ -162,10 +162,13 @@ export function buildImagePrompt(
     lines.push("product centered and hero of the composition, product label faces camera, negative space for copy");
   }
 
-  // 8. Brand colors
-  if (brandKit.colors.length > 0) {
-    lines.push(`brand palette: ${brandKit.colors.join(", ")}`);
-  }
+  // 8. Brand colors — INTENTIONALLY OMITTED from in-scene image prompts.
+  // Injecting `brand palette: #hex, #hex` here tints wardrobe, lighting and
+  // surfaces with the brand colors, which destroys photorealism (verified
+  // Bentley test 19 May). Brand colors are surfaced ONLY in chrome:
+  // captions, end card, opener/closer, lower-thirds, motion graphics.
+  // Logo continues to be passed as a reference image to edit models
+  // (Nano Banana Pro Edit Multi) for product-shot scenarios.
 
   // 9. Quality cues
   if (isAnimated) {

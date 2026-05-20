@@ -9,11 +9,78 @@ export interface ProductInput {
 }
 
 // ─── Brand Kit ──────────────────────────────────────────────
+/**
+ * First-class brand identity. Typed fields drive UI surfaces (overlays,
+ * captions, end card, lower-thirds, Remotion compositions). Legacy `colors`
+ * and `fonts` arrays remain for back-compat with older campaigns; new code
+ * should prefer the typed accessors.
+ *
+ * IMPORTANT (Sprint A): Brand colors are NEVER injected into in-scene image
+ * prompts — they destroy realism by tinting wardrobe/lighting. Colors are
+ * for chrome (overlays, end card, captions, motion graphics) ONLY.
+ */
 export interface BrandKit {
   logoUrl?: string;
-  colors: string[]; // hex codes
+  /** Legacy palette (3 hex codes). Kept in sync with primary/secondary/accent. */
+  colors: string[];
+  /** Legacy font list. Kept in sync with displayFont/bodyFont. */
   fonts: string[];
+  /** Hero / dominant brand color (CTAs, end card backdrop, opener accent). */
+  primaryColor?: string;
+  /** Supporting brand color (secondary CTAs, sub-headings). */
+  secondaryColor?: string;
+  /** Accent color (callouts, highlights, motion graphics). */
+  accentColor?: string;
+  /** Display font — used for headings, end card title, opener title. */
+  displayFont?: string;
+  /** Body font — used for captions, lower-thirds, body copy. */
+  bodyFont?: string;
   guidelines?: string;
+  /** Tone of voice for copy generation (Sprint A item 4). */
+  toneOfVoice?: "polished" | "casual" | "gritty" | "ugc-authentic";
+}
+
+/**
+ * Curated set of 12 Google Fonts available in the Brand Hub dropdowns.
+ * Chosen for production-grade brand work: covers display/serif/sans/grotesque.
+ * Used in: Brand Hub form, caption rendering, Remotion compositions.
+ */
+export const GOOGLE_FONTS: { value: string; label: string; category: "sans" | "serif" | "display" }[] = [
+  { value: "Inter",            label: "Inter",            category: "sans" },
+  { value: "Sora",             label: "Sora",             category: "sans" },
+  { value: "Geist",            label: "Geist",            category: "sans" },
+  { value: "Space Grotesk",    label: "Space Grotesk",    category: "sans" },
+  { value: "DM Sans",          label: "DM Sans",          category: "sans" },
+  { value: "Bricolage Grotesque", label: "Bricolage Grotesque", category: "sans" },
+  { value: "DM Serif Display", label: "DM Serif Display", category: "serif" },
+  { value: "Playfair Display", label: "Playfair Display", category: "serif" },
+  { value: "Cormorant Garamond", label: "Cormorant Garamond", category: "serif" },
+  { value: "Fraunces",         label: "Fraunces",         category: "serif" },
+  { value: "Bebas Neue",       label: "Bebas Neue",       category: "display" },
+  { value: "Anton",            label: "Anton",            category: "display" },
+];
+
+/** Pick the best display font with sensible fallback chain. */
+export function getDisplayFont(kit: BrandKit | undefined): string {
+  return kit?.displayFont || kit?.fonts?.[0] || "Inter";
+}
+
+/** Pick the best body font with sensible fallback chain. */
+export function getBodyFont(kit: BrandKit | undefined): string {
+  return kit?.bodyFont || kit?.fonts?.[1] || kit?.fonts?.[0] || "Inter";
+}
+
+/** Pick the primary brand color with fallback to legacy colors[0]. */
+export function getPrimaryColor(kit: BrandKit | undefined): string {
+  return kit?.primaryColor || kit?.colors?.[0] || "#a855f7";
+}
+
+export function getSecondaryColor(kit: BrandKit | undefined): string {
+  return kit?.secondaryColor || kit?.colors?.[1] || "#7c3aed";
+}
+
+export function getAccentColor(kit: BrandKit | undefined): string {
+  return kit?.accentColor || kit?.colors?.[2] || "#1e1b4b";
 }
 
 // ─── Target Audience ────────────────────────────────────────

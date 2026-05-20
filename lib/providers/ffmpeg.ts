@@ -115,6 +115,14 @@ export interface AssemblyParams {
    */
   voiceoverSegments?: VoiceoverSegmentInput[];
   musicPath?: string;
+  /**
+   * Optional ambient bed (e.g. cafe noise) mixed UNDER the music. Used for
+   * testimonial_ugc template to add real-world texture. Different from
+   * `useNativeAudio` which pulls ambience from the source clip's own track.
+   */
+  ambientPath?: string;
+  /** Ambient bed volume, 0.0–0.5 typical. Defaults to 0.08 when ambientPath set. */
+  ambientVolume?: number;
   outputDir: string;
   fps?: number;
   width?: number;
@@ -129,6 +137,27 @@ export interface AssemblyParams {
    * level. Has no effect on silent models (Seedance, Wan).
    */
   useNativeAudio?: boolean;
+  /**
+   * Add subtle handheld jitter (Sprint A item 5) to make Seedance/Kling/Wan
+   * clips feel iPhone-shot. Applied during the clip-normalization pass as a
+   * tiny time-varying crop offset. Cheap, no analysis required.
+   * Auto-enabled in callers for testimonial_ugc adFormat.
+   */
+  addHandheldJitter?: boolean;
+  /**
+   * Branded chrome paths (Sprint A item 6c). All optional. When present:
+   *   • `openerPath`: prepended to the timeline (no xfade — clean cut)
+   *   • `endCardPath`: appended to the timeline (no xfade)
+   *   • `overlayPaths[i]`: composited ON TOP of normalized clip i via FFmpeg
+   *     overlay filter (transparent WebM with alpha channel)
+   * VO offsets are automatically shifted by `openerDurationSec` so the
+   * voiceover stays aligned with the scene clips.
+   */
+  openerPath?: string;
+  openerDurationSec?: number;
+  endCardPath?: string;
+  endCardDurationSec?: number;
+  overlayPaths?: (string | undefined)[];
 }
 
 // Varied Ken Burns motion patterns for visual variety
@@ -148,6 +177,8 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
     voiceoverPath,
     voiceoverSegments,
     musicPath,
+    ambientPath,
+    ambientVolume: customAmbientVolume,
     outputDir,
     fps = 30,
     width = 1280,
@@ -155,6 +186,12 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
     tier,
     adFormat,
     useNativeAudio = false,
+    addHandheldJitter = false,
+    openerPath,
+    openerDurationSec = 0,
+    endCardPath,
+    endCardDurationSec = 0,
+    overlayPaths,
   } = params;
 
   await fs.mkdir(outputDir, { recursive: true });
@@ -177,12 +214,55 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
       // generates ambient SFX); strip it otherwise to avoid surprise audio.
       // Silent models (Seedance, Wan) just produce a silent track either way.
       const audioFlag = useNativeAudio ? [] : ["-an"];
-      await execFileAsync(ffmpeg, [
-        "-i", videoClips[i],
-        "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
-        "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf,
-        ...audioFlag, "-pix_fmt", "yuv420p", "-y", normPath,
-      ]);
+      // Build the video filter chain. Optional handheld jitter is applied
+      // BEFORE scale/pad so the crop window moves within the source frame.
+      // The jitter: scale slightly oversized → moving crop window → final scale/pad.
+      // Each clip gets a different phase offset so motion isn't synchronized.
+      const phase = i * 1.3;
+      const jitterChain = addHandheldJitter
+        ? [
+            // Oversample by ~5% so we have headroom for the moving crop.
+            `scale=iw*1.05:ih*1.05:flags=lanczos`,
+            // Crop a window slightly smaller than the source, with subtle sin/cos
+            // offsets driven by `t` (clip timestamp). Amplitudes kept small
+            // (~6px) so the jitter reads as "handheld" not "drunk camera".
+            `crop=in_w*0.92:in_h*0.92:` +
+              `(in_w-out_w)/2+6*sin(t*1.7+${phase.toFixed(2)}):` +
+              `(in_h-out_h)/2+5*cos(t*2.1+${phase.toFixed(2)})`,
+          ]
+        : [];
+      const finalFilter = [
+        ...jitterChain,
+        `scale=${width}:${height}:force_original_aspect_ratio=decrease`,
+        `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
+      ].join(",");
+      // If this scene has a Remotion overlay (transparent WebM), composite it
+      // ON TOP of the normalized frame via `overlay` in a filter_complex. The
+      // overlay file is added as a second input, scaled to match the canvas,
+      // then composited with alpha. We use -shortest behavior implicitly via
+      // overlay's end-on-shortest default to keep duration honest.
+      const overlayForScene = overlayPaths?.[i];
+      if (overlayForScene) {
+        await execFileAsync(ffmpeg, [
+          "-i", videoClips[i],
+          "-i", overlayForScene,
+          "-filter_complex",
+          `[0:v]${finalFilter}[base];` +
+          `[1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black@0[ovl];` +
+          `[base][ovl]overlay=0:0:format=auto[v]`,
+          "-map", "[v]",
+          ...(useNativeAudio ? ["-map", "0:a?"] : ["-an"]),
+          "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf,
+          "-pix_fmt", "yuv420p", "-y", normPath,
+        ]);
+      } else {
+        await execFileAsync(ffmpeg, [
+          "-i", videoClips[i],
+          "-vf", finalFilter,
+          "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf,
+          ...audioFlag, "-pix_fmt", "yuv420p", "-y", normPath,
+        ]);
+      }
       clipPaths.push(normPath);
 
       const real = await probeDuration(normPath);
@@ -280,6 +360,52 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
     }
   }
 
+  // ── Branded chrome (Sprint A item 6c) ────────────────────────
+  // Prepend opener + append endCard via simple concat (no xfade — chrome
+  // moments stay clean). Both are normalized to the same dims as scene clips
+  // before concat so the demuxer is happy.
+  if (openerPath || endCardPath) {
+    const concatPieces: string[] = [];
+
+    // Normalize opener to scene dims, strip audio (chrome shouldn't carry it).
+    if (openerPath) {
+      const normOpener = path.join(outputDir, "norm_opener.mp4");
+      await execFileAsync(ffmpeg, [
+        "-i", openerPath,
+        "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
+        "-an", "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf,
+        "-pix_fmt", "yuv420p", "-y", normOpener,
+      ]);
+      concatPieces.push(normOpener);
+    }
+    concatPieces.push(currentVideo);
+    if (endCardPath) {
+      const normEnd = path.join(outputDir, "norm_endcard.mp4");
+      await execFileAsync(ffmpeg, [
+        "-i", endCardPath,
+        "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
+        "-an", "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf,
+        "-pix_fmt", "yuv420p", "-y", normEnd,
+      ]);
+      concatPieces.push(normEnd);
+    }
+
+    const concatFile = path.join(outputDir, "chrome_concat.txt");
+    await fs.writeFile(
+      concatFile,
+      concatPieces.map((p) => `file '${p.replace(/\\/g, "/")}'`).join("\n")
+    );
+    const chromedVideo = path.join(outputDir, "video_with_chrome.mp4");
+    await execFileAsync(ffmpeg, [
+      "-f", "concat", "-safe", "0", "-i", concatFile,
+      // Concat demuxer requires identical codec params — re-encode lightly
+      // to guarantee that even when xfade output and chrome have minor diffs.
+      "-c:v", "libx264", "-preset", enc.preset, "-crf", enc.crf,
+      "-pix_fmt", "yuv420p", "-an", "-y", chromedVideo,
+    ]);
+    currentVideo = chromedVideo;
+  }
+
   // ── Audio mix ───────────────────────────────────────────────
   //
   // Inputs (each as a separate -i to FFmpeg, indices matter):
@@ -298,10 +424,13 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
   // Falls back to copy-video-only when there's literally nothing to mix.
 
   const mix = audioMixForFormat(adFormat);
-  // Cumulative offset of each scene (used to delay VO segments).
+  // Cumulative offset of each scene (used to delay VO segments). When an
+  // opener is prepended, every offset shifts by openerDurationSec so VO
+  // still lands on the right scene clip.
+  const openerShift = openerPath ? (openerDurationSec || 0) : 0;
   const sceneOffsets: number[] = [];
   {
-    let cum = 0;
+    let cum = openerShift;
     for (let i = 0; i < actualDurations.length; i++) {
       sceneOffsets.push(cum);
       cum += actualDurations[i] || 5;
@@ -314,8 +443,11 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
     ? (await probeHasAudioStream(currentVideo))
     : false;
   // When ambient is in the mix, slightly duck the music so the bed doesn't compete.
-  const musicVolumeAdjusted = hasNativeAudio ? mix.musicVolume * 0.7 : mix.musicVolume;
+  const musicVolumeAdjusted = hasNativeAudio || ambientPath ? mix.musicVolume * 0.7 : mix.musicVolume;
   const ambientVolume = 0.12;
+  const externalAmbientVolume = typeof customAmbientVolume === "number"
+    ? Math.max(0, Math.min(0.5, customAmbientVolume))
+    : 0.08;
 
   const useSegments = !!(voiceoverSegments && voiceoverSegments.length > 0);
   const useSingleVo = !useSegments && !!voiceoverPath;
@@ -325,6 +457,7 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
   const voSegmentStreamIdx: { sceneIndex: number; idx: number }[] = [];
   let voSingleIdx: number | null = null;
   let musicIdx: number | null = null;
+  let externalAmbientIdx: number | null = null;
   let nextIdx = 1;
 
   if (useSegments) {
@@ -343,8 +476,13 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
     musicIdx = nextIdx;
     nextIdx++;
   }
+  if (ambientPath) {
+    audioInputs.push("-i", ambientPath);
+    externalAmbientIdx = nextIdx;
+    nextIdx++;
+  }
 
-  const haveAnyAudio = useSegments || useSingleVo || musicIdx !== null || hasNativeAudio;
+  const haveAnyAudio = useSegments || useSingleVo || musicIdx !== null || externalAmbientIdx !== null || hasNativeAudio;
 
   if (!haveAnyAudio) {
     await execFileAsync(ffmpeg, [
@@ -386,6 +524,13 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
       mixLabels.push("[music]");
     }
 
+    if (externalAmbientIdx !== null) {
+      // External ambient bed (e.g. cafe noise file). Loop with `aloop` so
+      // short SFX files extend across the full video; tail-trim via -shortest.
+      filterParts.push(`[${externalAmbientIdx}:a]aloop=loop=-1:size=2e9,volume=${externalAmbientVolume},afade=t=in:d=1.5[extamb]`);
+      mixLabels.push("[extamb]");
+    }
+
     // Final mix — single track passes through; multiple amix together.
     if (mixLabels.length === 1) {
       filterParts.push(`${mixLabels[0]}aresample=async=1:first_pts=0[aout]`);
@@ -409,6 +554,11 @@ export async function assembleVideo(params: AssemblyParams): Promise<string> {
   await fs.unlink(path.join(outputDir, "video_xfade.mp4")).catch(() => {});
   await fs.unlink(path.join(outputDir, "concat.txt")).catch(() => {});
   await fs.unlink(path.join(outputDir, "video_concat.mp4")).catch(() => {});
+  // Sprint A item 6c chrome temps
+  await fs.unlink(path.join(outputDir, "norm_opener.mp4")).catch(() => {});
+  await fs.unlink(path.join(outputDir, "norm_endcard.mp4")).catch(() => {});
+  await fs.unlink(path.join(outputDir, "chrome_concat.txt")).catch(() => {});
+  await fs.unlink(path.join(outputDir, "video_with_chrome.mp4")).catch(() => {});
 
   return outputPath;
 }

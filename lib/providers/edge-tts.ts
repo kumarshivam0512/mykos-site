@@ -20,11 +20,45 @@ export function pickVoice(musicDirection: string): string {
   return "Kore";
 }
 
+// ─── Tone of voice (Sprint A item 4) ─────────────────────────────
+// Drives the TTS delivery instruction AND optional script post-processing.
+// "polished"       = classic ad voiceover (default)
+// "casual"         = friendly conversational
+// "gritty"         = raw, direct, no-nonsense
+// "ugc-authentic"  = customer-recording-on-iPhone — adds natural ticks
+export type VoiceTone = "polished" | "casual" | "gritty" | "ugc-authentic";
+
+const TONE_INSTRUCTIONS: Record<VoiceTone, string> = {
+  "polished":       "in a professional, clear, engaging tone suitable for a commercial advertisement",
+  "casual":         "in a friendly, warm, conversational tone — like talking to a friend",
+  "gritty":         "in a raw, direct, no-nonsense tone with energy and conviction",
+  "ugc-authentic":  "as if you're a real customer recording a phone video, slightly hesitant, casual cadence, with natural pauses and small filler words — never sound like a polished announcer",
+};
+
+/**
+ * Post-process VO text to lean into the tone. For UGC, inject a small number
+ * of natural filler words at sentence starts so the TTS engine renders them.
+ * Pure function — does not mutate input. Returns text unchanged for other tones.
+ */
+export function applyToneToText(text: string, tone: VoiceTone | undefined): string {
+  if (!tone || tone !== "ugc-authentic") return text;
+  // Light touch: lead-in filler on the first sentence + a "honestly" mid-sentence
+  // if the script is long enough. Keep it light — mechanical injection sounds awful.
+  const trimmed = text.trim();
+  if (!trimmed) return text;
+  const leadIns = ["Okay so,", "Honestly,", "Look,", "Like,"];
+  const pick = leadIns[Math.floor(trimmed.length) % leadIns.length];
+  // Lowercase the first letter after the lead-in so it reads naturally.
+  const first = trimmed[0].toLowerCase() + trimmed.slice(1);
+  return `${pick} ${first}`;
+}
+
 export async function generateVoiceover(
   script: string,
   voice: string,
   outputDir: string,
-  outputFilename: string = "voiceover.wav"
+  outputFilename: string = "voiceover.wav",
+  tone: VoiceTone = "polished"
 ): Promise<string> {
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, outputFilename);
@@ -42,6 +76,9 @@ export async function generateVoiceover(
     } as Record<string, unknown>,
   });
 
+  const instruction = TONE_INSTRUCTIONS[tone] ?? TONE_INSTRUCTIONS.polished;
+  const finalScript = applyToneToText(script, tone);
+
   // Gemini TTS free tier is 3 requests per minute. Retry on 429 with backoff
   // that respects the server-suggested retryDelay when present, so the user's
   // 4-scene segment-mode batch doesn't die on the 4th call.
@@ -51,7 +88,7 @@ export async function generateVoiceover(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       result = await model.generateContent(
-        `Read the following ad voiceover script in a professional, clear, engaging tone suitable for a commercial advertisement:\n\n${script}`
+        `Read the following ad voiceover script ${instruction}:\n\n${finalScript}`
       );
       break;
     } catch (err) {

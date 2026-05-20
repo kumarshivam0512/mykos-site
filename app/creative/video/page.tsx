@@ -19,9 +19,20 @@ import {
   Upload,
   Plus,
   X,
+  Music2,
 } from "lucide-react";
 import { estimatePreflightCost, formatDuration } from "@/lib/providers/tier-selector";
 import { ASPECT_RATIO_CLASS } from "@/lib/types";
+import {
+  SELECTABLE_TRACKS,
+  AMBIENT_BEDS,
+  pickTrackForTemplate,
+  getTrackById,
+  trackPublicUrl,
+  pickAmbientForTemplate,
+  getAmbientById,
+  ambientPublicUrl,
+} from "@/lib/templates/music-library";
 
 // Camera moves the user can choose per scene (maps to prompt engine NAMED_MOVES)
 const CAMERA_MOVES = [
@@ -54,6 +65,12 @@ interface SceneMotion {
   cameraMove: string;
   motionPrompt: string;
   duration: number; // per-scene duration
+  /** Optional on-screen text composited via Remotion overlay (Sprint A item 6d). */
+  overlayText?: string;
+  /** Position for the overlay text. */
+  overlayPosition?: "top" | "center" | "lower-third" | "bottom";
+  /** Render a brand-colored lower-third bar behind the text. */
+  overlayWithBar?: boolean;
 }
 
 export default function VideoStudioPage() {
@@ -63,7 +80,7 @@ export default function VideoStudioPage() {
 
   // Per-scene motion settings
   const [sceneMotions, setSceneMotions] = useState<SceneMotion[]>(
-    () => scenes.map(() => ({ cameraMove: "push in", motionPrompt: "", duration: 5 }))
+    () => scenes.map(() => ({ cameraMove: "push in", motionPrompt: "", duration: 5, overlayText: "", overlayPosition: "lower-third" as const, overlayWithBar: false }))
   );
   const [duration, setDuration] = useState(5);
   const [expandedScene, setExpandedScene] = useState<number | null>(0);
@@ -87,6 +104,23 @@ export default function VideoStudioPage() {
   const [burnCaptions, setBurnCaptions] = useState<boolean>(selectedAspectRatio !== "16:9");
   const [captionStyle, setCaptionStyle] = useState<"modern" | "tiktok" | "cinematic">("modern");
   const [srtUrl, setSrtUrl] = useState<string | null>(null);
+
+  // Music state (Sprint A item 2). "auto" defers to brief.adFormat → registry.
+  // Picking a specific track wins. "silence" disables music entirely.
+  const [musicChoice, setMusicChoice] = useState<string>("auto");
+  // Ambient bed (Sprint A item 3). Auto-picks cafe for testimonial_ugc.
+  const [ambientChoice, setAmbientChoice] = useState<string>("auto");
+  const [ambientVol, setAmbientVol] = useState<number>(0.08);
+  // Voice tone (Sprint A item 4). Defaults from brand kit if set, else "polished".
+  const [voiceTone, setVoiceTone] = useState<"polished" | "casual" | "gritty" | "ugc-authentic">(
+    brandKit.toneOfVoice || "polished"
+  );
+  // Branded chrome (Sprint A item 6c). Opener + end card around the ad.
+  const [useBrandedChrome, setUseBrandedChrome] = useState<boolean>(true);
+  const [openerStyle, setOpenerStyle] = useState<"minimal" | "scale" | "particle">("minimal");
+  const [openerDur, setOpenerDur] = useState<number>(1.5);
+  const [endCardDur, setEndCardDur] = useState<number>(2);
+  const [endCardBg, setEndCardBg] = useState<"solid" | "dark" | "light">("dark");
 
   const [error, setError] = useState("");
 
@@ -343,13 +377,35 @@ export default function VideoStudioPage() {
           // VO is paced to its CLIP's actual duration, not the planned one.
           voiceoverSegments: brief?.voiceoverSegments,
           voiceoverScript: brief?.voiceoverScript,
+          musicTrack: musicChoice,
           musicDirection: brief?.musicDirection || "professional",
+          ambientBed: ambientChoice,
+          ambientVolume: ambientVol,
+          voiceTone,
           tier: selectedTier,
           adFormat: brief?.adFormat,
           useNativeAudio: selectedTier === "premium",
           aspectRatio: selectedAspectRatio,
           burnedCaptions: burnCaptions,
           captionStyle,
+          // Inherit the brand body font so captions match brand typography.
+          captionFont: brandKit.bodyFont,
+          // Branded chrome (Sprint A item 6c)
+          useBrandedChrome,
+          brandKit,
+          productName: productInput.name,
+          tagline: brief?.endCard?.tagline,
+          ctaText: brief?.endCard?.ctaText,
+          openerStyle,
+          openerDurationSec: openerDur,
+          endCardDurationSec: endCardDur,
+          endCardBackground: endCardBg,
+          // Per-scene on-screen text overlays (Sprint A item 6d)
+          sceneOverlays: sceneMotions
+            .map((m, i) => m.overlayText?.trim()
+              ? { sceneIndex: i, text: m.overlayText!.trim(), position: m.overlayPosition, showLowerThirdBar: m.overlayWithBar }
+              : null)
+            .filter((x): x is NonNullable<typeof x> => x !== null),
         }),
       });
 
@@ -660,6 +716,44 @@ export default function VideoStudioPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* On-screen text overlay (Sprint A item 6d) — Remotion overlay
+                        composited on top of the clip. Empty = no overlay. */}
+                    <div className="border-t border-border pt-3 space-y-2">
+                      <label className="block text-xs text-muted-foreground">
+                        On-screen text <span className="text-muted-foreground/60">(optional · branded overlay)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={motion.overlayText ?? ""}
+                        onChange={(e) => updateSceneMotion(idx, { overlayText: e.target.value })}
+                        placeholder='e.g. "Limited Edition", "Now in MENA"'
+                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      {motion.overlayText?.trim() && (
+                        <div className="flex items-center gap-3">
+                          <select
+                            value={motion.overlayPosition ?? "lower-third"}
+                            onChange={(e) => updateSceneMotion(idx, { overlayPosition: e.target.value as "top" | "center" | "lower-third" | "bottom" })}
+                            className="bg-secondary border border-border rounded-lg px-2 py-1.5 text-xs"
+                          >
+                            <option value="top">Top</option>
+                            <option value="center">Center</option>
+                            <option value="lower-third">Lower-third</option>
+                            <option value="bottom">Bottom</option>
+                          </select>
+                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={motion.overlayWithBar ?? false}
+                              onChange={(e) => updateSceneMotion(idx, { overlayWithBar: e.target.checked })}
+                              className="accent-primary"
+                            />
+                            Brand-colored bar background
+                          </label>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -756,8 +850,233 @@ export default function VideoStudioPage() {
                   <span className="text-xs bg-green-500/10 text-green-400 px-2 py-1 rounded-full whitespace-nowrap">Latest ready</span>
                 )}
               </div>
+
+              {/* Tone of voice (Sprint A item 4) */}
+              <div>
+                <label className="block text-[11px] text-muted-foreground mb-1.5">Tone of voice</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {([
+                    { id: "polished",      label: "Polished",      desc: "Classic ad VO" },
+                    { id: "casual",        label: "Casual",        desc: "Friendly conversational" },
+                    { id: "gritty",        label: "Gritty",        desc: "Raw & direct" },
+                    { id: "ugc-authentic", label: "UGC",           desc: "iPhone-recording feel" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setVoiceTone(opt.id)}
+                      className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                        voiceTone === opt.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"
+                      }`}
+                    >
+                      <div className="text-xs font-medium">{opt.label}</div>
+                      <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {voiceoverUrl && (
                 <audio src={voiceoverUrl} controls className="w-full h-8" />
+              )}
+            </div>
+          )}
+
+          {/* Music (Sprint A item 2) — picks a track from the registry, with
+              an optional ambient bed underneath. "auto" defers to brief.adFormat. */}
+          {generatedClips.length > 0 && (() => {
+            const autoTrack = pickTrackForTemplate(brief?.adFormat);
+            const resolvedTrack =
+              musicChoice === "auto" ? autoTrack :
+              musicChoice === "silence" ? undefined :
+              getTrackById(musicChoice) ?? autoTrack;
+            const autoAmb = pickAmbientForTemplate(brief?.adFormat);
+            const resolvedAmb =
+              ambientChoice === "auto" ? autoAmb :
+              ambientChoice === "none" ? undefined :
+              getAmbientById(ambientChoice) ?? autoAmb;
+            return (
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <Music2 className="w-4 h-4 text-primary" /> Music & Ambience
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Royalty-free Pixabay tracks. Auto-pick uses your ad format
+                    {brief?.adFormat ? ` (${brief.adFormat.replace(/_/g, " ")})` : ""}.
+                    Run <code className="text-primary">npm run music:download</code> once if files aren&apos;t on disk yet.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1.5">Music track</label>
+                    <select
+                      value={musicChoice}
+                      onChange={(e) => setMusicChoice(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="auto">Auto · {autoTrack.title}</option>
+                      <option value="silence">(no music)</option>
+                      <optgroup label="All tracks">
+                        {SELECTABLE_TRACKS.map((t) => (
+                          <option key={t.id} value={t.id}>{t.title} · {t.bpm} BPM</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    {resolvedTrack && (
+                      <audio
+                        key={resolvedTrack.id}
+                        src={trackPublicUrl(resolvedTrack)}
+                        controls
+                        preload="none"
+                        className="w-full h-8 mt-2"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1.5">Ambient bed</label>
+                    <select
+                      value={ambientChoice}
+                      onChange={(e) => setAmbientChoice(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="auto">{autoAmb ? `Auto · ${autoAmb.title}` : "Auto · none for this format"}</option>
+                      <option value="none">(no ambient)</option>
+                      <optgroup label="All beds">
+                        {AMBIENT_BEDS.map((b) => (
+                          <option key={b.id} value={b.id}>{b.title}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    {resolvedAmb && (
+                      <>
+                        <audio
+                          key={resolvedAmb.id}
+                          src={ambientPublicUrl(resolvedAmb)}
+                          controls
+                          preload="none"
+                          className="w-full h-8 mt-2"
+                        />
+                        <div className="mt-2">
+                          <label className="block text-[11px] text-muted-foreground mb-1 flex items-center justify-between">
+                            <span>Volume</span>
+                            <span className="font-mono">{ambientVol.toFixed(2)}</span>
+                          </label>
+                          <input
+                            type="range"
+                            min={0}
+                            max={0.20}
+                            step={0.01}
+                            value={ambientVol}
+                            onChange={(e) => setAmbientVol(parseFloat(e.target.value))}
+                            className="w-full accent-primary"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Branded Chrome (Sprint A item 6c) — Remotion opener + end card */}
+          {generatedClips.length > 0 && (
+            <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-primary" /> Branded Chrome
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Production-grade opener and end card rendered via Remotion using your Brand Hub palette and fonts. First render bundles the compositions (~5–10s); subsequent renders are cached.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={useBrandedChrome}
+                    onChange={(e) => setUseBrandedChrome(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  <span className="text-xs">Enabled</span>
+                </label>
+              </div>
+
+              {useBrandedChrome && (
+                <>
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1.5">Opener style</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { id: "minimal",  label: "Minimal",  desc: "Logo + tagline fade" },
+                        { id: "scale",    label: "Scale",    desc: "Logo springs in" },
+                        { id: "particle", label: "Particle", desc: "Subtle dust accent" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setOpenerStyle(opt.id)}
+                          className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                            openerStyle === opt.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"
+                          }`}
+                        >
+                          <div className="text-xs font-medium">{opt.label}</div>
+                          <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-1 flex items-center justify-between">
+                        <span>Opener duration</span>
+                        <span className="font-mono">{openerDur.toFixed(1)}s</span>
+                      </label>
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={3}
+                        step={0.1}
+                        value={openerDur}
+                        onChange={(e) => setOpenerDur(parseFloat(e.target.value))}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-1 flex items-center justify-between">
+                        <span>End card duration</span>
+                        <span className="font-mono">{endCardDur.toFixed(1)}s</span>
+                      </label>
+                      <input
+                        type="range"
+                        min={1}
+                        max={4}
+                        step={0.1}
+                        value={endCardDur}
+                        onChange={(e) => setEndCardDur(parseFloat(e.target.value))}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-1.5">End card background</label>
+                      <select
+                        value={endCardBg}
+                        onChange={(e) => setEndCardBg(e.target.value as "solid" | "dark" | "light")}
+                        className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="dark">Dark · default</option>
+                        <option value="solid">Solid · brand color</option>
+                        <option value="light">Light · minimalist</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-muted-foreground/70">
+                    Uses brand kit: <span className="text-primary">{brandKit.primaryColor || brandKit.colors[0] || "default"}</span> · display font <span className="text-primary">{brandKit.displayFont || "Inter"}</span>
+                  </p>
+                </>
               )}
             </div>
           )}
@@ -858,6 +1177,10 @@ export default function VideoStudioPage() {
               download={`${productInput.name || "mykos"}_video_${Date.now()}.mp4`}
               className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6 py-3 rounded-xl">
               <Download className="w-4 h-4" /> Download Video
+            </a>
+            <a href="/creative/post"
+              className="inline-flex items-center gap-2 bg-secondary hover:bg-secondary/80 text-foreground font-medium px-6 py-3 rounded-xl ml-2 text-sm">
+              <Sparkles className="w-4 h-4" /> Open in Post Studio
             </a>
           </div>
         )}

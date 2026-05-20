@@ -1,0 +1,166 @@
+{
+  "tracks": [
+    {
+      "id": "cinematic-piano-60bpm",
+      "title": "Cinematic Piano · slow & emotive",
+      "source": "Pixabay",
+      "license": "Pixabay Content License (CC0-equivalent, commercial use, no attribution required)",
+      "url": "https://cdn.pixabay.com/audio/2024/02/05/audio_5e7c3a0c92.mp3",
+      "pageUrl": "https://pixabay.com/music/solo-piano-soft-piano-slow-melodic-piano-music-22624/"
+    },
+    {
+      "id": "cinematic-strings-hopeful",
+      "title": "Hopeful Strings · rising arc",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2023/05/23/audio_8e76d8c08e.mp3",
+      "pageUrl": "https://pixabay.com/music/beautiful-plays-156175/"
+    },
+    {
+      "id": "luxury-ambient-warm",
+      "title": "Luxury Ambient · warm pads",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/10/30/audio_347111d654.mp3",
+      "pageUrl": "https://pixabay.com/music/ambient-relaxing-music-vol1-124477/"
+    },
+    {
+      "id": "intimate-piano-editorial",
+      "title": "Intimate Piano · editorial soft",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2023/10/30/audio_2feca12c11.mp3",
+      "pageUrl": "https://pixabay.com/music/solo-piano-soft-piano-music-312509/"
+    },
+    {
+      "id": "upbeat-ukulele",
+      "title": "Upbeat Ukulele · friendly",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
+      "pageUrl": "https://pixabay.com/music/upbeat-happy-rock-112094/"
+    },
+    {
+      "id": "acoustic-guitar-warm",
+      "title": "Acoustic Guitar · warm strum",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/03/15/audio_1aae9d4c2f.mp3",
+      "pageUrl": "https://pixabay.com/music/acoustic-group-acoustic-folk-3014/"
+    },
+    {
+      "id": "trap-workout-build",
+      "title": "Trap Workout · big build",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/10/25/audio_864e1b30b9.mp3",
+      "pageUrl": "https://pixabay.com/music/upbeat-powerful-energetic-sport-rock-trailer-122186/"
+    },
+    {
+      "id": "electronic-drop-edm",
+      "title": "Electronic Drop · EDM banger",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/03/10/audio_c8c8a73467.mp3",
+      "pageUrl": "https://pixabay.com/music/dance-house-edm-electronic-future-bass-future-1383/"
+    },
+    {
+      "id": "electronic-ambient-drone",
+      "title": "Electronic Ambient · drone bed",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/08/23/audio_d16737dc28.mp3",
+      "pageUrl": "https://pixabay.com/music/ambient-spacial-harvest-117073/"
+    },
+    {
+      "id": "clinical-minimal-ambient",
+      "title": "Clinical Minimal · sparse tech",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2024/04/19/audio_4bdac42ba1.mp3",
+      "pageUrl": "https://pixabay.com/music/ambient-tech-corporate-205598/"
+    },
+    {
+      "id": "indie-pop-light",
+      "title": "Indie Pop · light & bouncy",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/10/27/audio_8d04ae9bea.mp3",
+      "pageUrl": "https://pixabay.com/music/upbeat-summer-pop-122426/"
+    }
+  ],
+  "ambient": [
+    {
+      "id": "cafe",
+      "title": "Café noise · chatter & cups",
+      "file": "cafe.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/08/04/audio_d115bbc7c6.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/cafe-ambience-113149/"
+    },
+    {
+      "id": "kitchen",
+      "title": "Kitchen · clatter & sizzle",
+      "file": "kitchen.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2023/03/12/audio_b25e94c8a3.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/kitchen-ambience-142175/"
+    },
+    {
+      "id": "street",
+      "title": "Street · light traffic",
+      "file": "street.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/03/22/audio_2cd56a5f5b.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/street-noise-50833/"
+    },
+    {
+      "id": "room-tone",
+      "title": "Room tone · quiet indoor",
+      "file": "room-tone.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/09/03/audio_53e1bea170.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/room-tone-quiet-117577/"
+    },
+    {
+      "id": "office",
+      "title": "Office hum · keyboard & HVAC",
+      "file": "office.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/08/03/audio_88c9f4afc3.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/office-ambience-113119/"
+    },
+    {
+      "id": "park",
+      "title": "Park outdoor · birds & wind",
+      "file": "park.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/03/10/audio_2b3e89d3a4.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/park-ambience-7026/"
+    },
+    {
+      "id": "coffee-shop",
+      "title": "Coffee shop · espresso bar",
+      "file": "coffee-shop.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2022/03/29/audio_ad0f10b1ab.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/coffee-shop-ambience-6362/"
+    },
+    {
+      "id": "gym",
+      "title": "Gym ambient · weights & cardio",
+      "file": "gym.mp3",
+      "source": "Pixabay",
+      "license": "Pixabay Content License",
+      "url": "https://cdn.pixabay.com/audio/2023/05/14/audio_ef9c2dc6df.mp3",
+      "pageUrl": "https://pixabay.com/sound-effects/gym-ambience-152178/"
+    }
+  ]
+}

@@ -6,13 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "music:download": "node scripts/download-music.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.41.2",
     "@azure/cosmos": "^4.9.3",
     "@ffprobe-installer/ffprobe": "^2.1.2",
     "@google/generative-ai": "^0.24.1",
+    "@remotion/bundler": "^4.0.463",
+    "@remotion/cli": "^4.0.463",
+    "@remotion/google-fonts": "^4.0.463",
+    "@remotion/renderer": "^4.0.463",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "ffmpeg-static": "^5.3.0",
@@ -23,6 +28,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
+    "remotion": "^4.0.463",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.5.0",
     "ws": "^8.20.0",

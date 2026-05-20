@@ -13,9 +13,16 @@ import { promisify } from "util";
 import path from "path";
 import fs from "fs/promises";
 import { assembleVideo, type VoiceoverSegmentInput } from "@/lib/providers/ffmpeg";
-import { generateVoiceover, pickVoice } from "@/lib/providers/edge-tts";
-import type { QualityTier, AdFormat, VoiceoverSegment, AspectRatio } from "@/lib/types";
+import { generateVoiceover, pickVoice, type VoiceTone } from "@/lib/providers/edge-tts";
+import type { QualityTier, AdFormat, VoiceoverSegment, AspectRatio, BrandKit } from "@/lib/types";
 import { ASPECT_RATIO_VIDEO_DIMENSIONS } from "@/lib/types";
+import {
+  getTrackById,
+  pickTrackForTemplate,
+  getAmbientById,
+  pickAmbientForTemplate,
+} from "@/lib/templates/music-library";
+import { renderBrandAsset, resolveLogoUrl } from "@/lib/providers/remotion-render";
 import { checkRateLimit, apiError, ERROR_CODES } from "@/lib/rate-limit";
 
 const execFileAsync = promisify(execFile);
@@ -59,8 +66,25 @@ interface FinalizeBody {
   voiceoverSegments?: VoiceoverSegment[];
   /** Fallback: a single voiceover script if segments aren't available. */
   voiceoverScript?: string;
+  /**
+   * Music selection (Sprint A item 2). Either:
+   *   - a track id from `lib/templates/music-library.ts` (e.g. "cinematic-piano-60bpm")
+   *   - `"auto"` to auto-pick from the registry based on `adFormat`
+   *   - `"silence"` / undefined to skip music
+   * Legacy: a bare filename stem (e.g. "cinematic") still works — resolved as
+   * `public/music/<value>.mp3` for back-compat with older clients.
+   */
   musicTrack?: string;
   musicDirection?: string;
+  /**
+   * Ambient bed selection (Sprint A item 3). Either:
+   *   - an id from AMBIENT_BEDS (e.g. "cafe", "kitchen")
+   *   - `"auto"` to auto-pick (cafe for testimonial_ugc, none otherwise)
+   *   - `"none"` / undefined to skip
+   */
+  ambientBed?: string;
+  /** Ambient bed volume, 0–0.2 typical. Default 0.08. */
+  ambientVolume?: number;
   tier?: QualityTier;
   adFormat?: AdFormat;
   useNativeAudio?: boolean;
@@ -70,6 +94,45 @@ interface FinalizeBody {
   burnedCaptions?: boolean;
   /** Caption style preset. */
   captionStyle?: "modern" | "tiktok" | "cinematic";
+  /**
+   * Override caption font. Caller (Video Studio) passes `brandKit.bodyFont`
+   * so captions inherit the brand's typography instead of hardcoded Helvetica.
+   * Falls back to the style's default font when undefined.
+   */
+  captionFont?: string;
+  /**
+   * Voice tone (Sprint A item 4). Drives TTS delivery instruction:
+   * polished | casual | gritty | ugc-authentic. Default: polished.
+   */
+  voiceTone?: VoiceTone;
+  /**
+   * Add handheld jitter post-pass (Sprint A item 5). Auto-enabled when
+   * adFormat is testimonial_ugc or voiceTone is ugc-authentic. Pass `false`
+   * to force-disable; `true` to force-enable regardless of format.
+   */
+  handheldJitter?: boolean;
+  /**
+   * Branded chrome (Sprint A item 6c). When `useBrandedChrome` is true:
+   *   • Opener (default 1.5s) rendered with brandKit + productName + tagline
+   *   • End card (default 2s) rendered with brandKit + ctaText
+   *   • Per-scene overlays rendered if `sceneOverlays` array provided
+   * `brandKit` is required when `useBrandedChrome` is true.
+   */
+  useBrandedChrome?: boolean;
+  brandKit?: BrandKit;
+  productName?: string;
+  tagline?: string;
+  ctaText?: string;
+  openerStyle?: "minimal" | "scale" | "particle";
+  openerDurationSec?: number;
+  endCardDurationSec?: number;
+  endCardBackground?: "solid" | "dark" | "light";
+  sceneOverlays?: {
+    sceneIndex: number;
+    text: string;
+    position?: "top" | "center" | "lower-third" | "bottom";
+    showLowerThirdBar?: boolean;
+  }[];
 }
 
 export async function POST(req: NextRequest) {
@@ -85,12 +148,27 @@ export async function POST(req: NextRequest) {
       voiceoverScript,
       musicTrack,
       musicDirection,
+      ambientBed,
+      ambientVolume,
       tier,
       adFormat,
       useNativeAudio,
       aspectRatio = "16:9",
       burnedCaptions,
       captionStyle = "modern",
+      captionFont,
+      voiceTone = "polished",
+      handheldJitter,
+      useBrandedChrome = false,
+      brandKit,
+      productName = "",
+      tagline = "",
+      ctaText = "",
+      openerStyle = "minimal",
+      openerDurationSec = 1.5,
+      endCardDurationSec = 2,
+      endCardBackground = "dark",
+      sceneOverlays,
     } = body;
 
     if (!videoClips?.length) {
@@ -142,7 +220,7 @@ export async function POST(req: NextRequest) {
         const maxWords = Math.floor(duration * 2.4);
         const trimmed = trimToWords(seg.text, maxWords);
         const filename = `vo_scene_${sceneIdx}.wav`;
-        const outPath = await generateVoiceover(trimmed, voice, OUTPUT_DIR, filename);
+        const outPath = await generateVoiceover(trimmed, voice, OUTPUT_DIR, filename, voiceTone);
         voSegmentPaths.push({ sceneIndex: sceneIdx, path: outPath });
         // 21s pacing under Gemini TTS 3/min free tier limit
         if (i < validSegments.length - 1) {
@@ -157,19 +235,121 @@ export async function POST(req: NextRequest) {
       const totalSeconds = actualDurations.reduce((s, d) => s + d, 0);
       const maxWords = Math.floor(totalSeconds * 2.4);
       const trimmed = trimToWords(voiceoverScript, maxWords);
-      const outPath = await generateVoiceover(trimmed, voice, OUTPUT_DIR, "voiceover.wav");
+      const outPath = await generateVoiceover(trimmed, voice, OUTPUT_DIR, "voiceover.wav", voiceTone);
       mainVoUrl = `/output/${path.basename(outPath)}?v=${Date.now()}`;
     }
     // If neither is provided, we assemble without VO (music + ambient only).
 
     // ── Step 3: Assemble with the calibrated voiceover ─────────────────────
-    const musicPath = musicTrack
-      ? path.join(process.cwd(), "public", "music", `${musicTrack}.mp3`)
-      : undefined;
+    // Music selection: resolve via registry first, fall back to legacy bare
+    // filename for back-compat. Silent-OK if file is missing on disk.
+    const resolvedTrack = (() => {
+      if (!musicTrack || musicTrack === "silence" || musicTrack === "none") return undefined;
+      if (musicTrack === "auto") return pickTrackForTemplate(adFormat);
+      return getTrackById(musicTrack);
+    })();
+    let musicPath: string | undefined;
+    if (resolvedTrack) {
+      const p = path.join(process.cwd(), "public", "music", `${resolvedTrack.id}.mp3`);
+      try { await fs.access(p); musicPath = p; }
+      catch { console.warn(`[finalize] music track ${resolvedTrack.id} not on disk — assembling without music. Run \`npm run music:download\` to fetch.`); }
+    } else if (musicTrack && musicTrack !== "silence" && musicTrack !== "none" && musicTrack !== "auto") {
+      // Legacy bare filename path (e.g. "professional")
+      const p = path.join(process.cwd(), "public", "music", `${musicTrack}.mp3`);
+      try { await fs.access(p); musicPath = p; } catch { /* skip silently */ }
+    }
+
+    // Ambient bed (Sprint A item 3) — auto-pick for testimonial_ugc, explicit otherwise.
+    const resolvedAmbient = (() => {
+      if (!ambientBed || ambientBed === "none") return undefined;
+      if (ambientBed === "auto") return pickAmbientForTemplate(adFormat);
+      return getAmbientById(ambientBed);
+    })();
+    let ambientPath: string | undefined;
+    if (resolvedAmbient) {
+      const p = path.join(process.cwd(), "public", "music", "ambient", resolvedAmbient.file);
+      try { await fs.access(p); ambientPath = p; }
+      catch { console.warn(`[finalize] ambient bed ${resolvedAmbient.id} not on disk — skipping. Run \`npm run music:download\`.`); }
+    }
+
     const voiceoverPath = mainVoUrl && !voSegmentPaths ? toDiskPath(mainVoUrl) : undefined;
 
     // Aspect-aware FFmpeg canvas — 1280x720 for 16:9, 720x1280 for 9:16, etc.
     const dims = ASPECT_RATIO_VIDEO_DIMENSIONS[aspectRatio] ?? ASPECT_RATIO_VIDEO_DIMENSIONS["16:9"];
+
+    // ── Step 3a: Render branded chrome (Sprint A item 6c) ──────────────
+    // Opener, end card, and per-scene overlays via Remotion. All optional.
+    // If any single render fails (e.g. compositor not downloaded), we log
+    // and continue without that piece — never block the whole assembly.
+    let openerPath: string | undefined;
+    let openerDur = 0;
+    let endCardPath: string | undefined;
+    let endCardDur = 0;
+    let overlayPaths: (string | undefined)[] | undefined;
+
+    if (useBrandedChrome && brandKit) {
+      const origin = req.nextUrl.origin || "http://localhost:3000";
+      const absoluteLogo = resolveLogoUrl(brandKit.logoUrl, origin);
+
+      try {
+        const opener = await renderBrandAsset({
+          kind: "opener",
+          aspectRatio,
+          durationSec: openerDurationSec,
+          brandKit,
+          logoUrl: absoluteLogo,
+          openerStyle,
+          productName,
+          tagline,
+          background: "solid", // solid background — clean cut into scene 1
+        });
+        openerPath = opener.filePath;
+        openerDur = opener.durationSec;
+      } catch (err) {
+        console.warn(`[finalize] opener render failed, continuing without: ${(err as Error).message}`);
+      }
+
+      try {
+        const endCard = await renderBrandAsset({
+          kind: "endCard",
+          aspectRatio,
+          durationSec: endCardDurationSec,
+          brandKit,
+          logoUrl: absoluteLogo,
+          productName,
+          tagline,
+          ctaText,
+          endCardBackground,
+        });
+        endCardPath = endCard.filePath;
+        endCardDur = endCard.durationSec;
+      } catch (err) {
+        console.warn(`[finalize] endCard render failed, continuing without: ${(err as Error).message}`);
+      }
+
+      if (sceneOverlays?.length) {
+        overlayPaths = new Array(actualDurations.length).fill(undefined);
+        for (const ov of sceneOverlays) {
+          if (ov.sceneIndex < 0 || ov.sceneIndex >= actualDurations.length) continue;
+          if (!ov.text?.trim()) continue;
+          try {
+            const overlay = await renderBrandAsset({
+              kind: "sceneOverlay",
+              aspectRatio,
+              durationSec: actualDurations[ov.sceneIndex],
+              brandKit,
+              logoUrl: absoluteLogo,
+              text: ov.text,
+              position: ov.position ?? "lower-third",
+              showLowerThirdBar: ov.showLowerThirdBar ?? false,
+            });
+            overlayPaths[ov.sceneIndex] = overlay.filePath;
+          } catch (err) {
+            console.warn(`[finalize] overlay render for scene ${ov.sceneIndex} failed: ${(err as Error).message}`);
+          }
+        }
+      }
+    }
 
     const videoPath = await assembleVideo({
       videoClips: clipDiskPaths,
@@ -177,12 +357,25 @@ export async function POST(req: NextRequest) {
       voiceoverPath,
       voiceoverSegments: voSegmentPaths,
       musicPath,
+      ambientPath,
+      ambientVolume,
       outputDir: OUTPUT_DIR,
       width: dims.width,
       height: dims.height,
       tier,
       adFormat,
       useNativeAudio,
+      // Auto-enable handheld jitter for UGC ad format or UGC voice tone.
+      // Explicit flag wins when caller passes it.
+      addHandheldJitter: typeof handheldJitter === "boolean"
+        ? handheldJitter
+        : (adFormat === "testimonial_ugc" || voiceTone === "ugc-authentic"),
+      // Branded chrome paths (any may be undefined — assembleVideo handles it).
+      openerPath,
+      openerDurationSec: openerDur,
+      endCardPath,
+      endCardDurationSec: endCardDur,
+      overlayPaths,
     });
 
     // ── Step 4: Captions (Sprint 2) ──────────────────────────────
@@ -192,7 +385,7 @@ export async function POST(req: NextRequest) {
     let captionedVideoUrl: string | undefined;
 
     if (voiceoverSegments?.length) {
-      const srtContent = buildSrtFromSegments(voiceoverSegments, actualDurations);
+      const srtContent = buildSrtFromSegments(voiceoverSegments, actualDurations, openerDur);
       const srtPath = path.join(OUTPUT_DIR, "final_ad.srt");
       await fs.writeFile(srtPath, srtContent, "utf-8");
       srtUrl = `/output/final_ad.srt?v=${Date.now()}`;
@@ -202,7 +395,7 @@ export async function POST(req: NextRequest) {
       const shouldBurn = burnedCaptions ?? (aspectRatio !== "16:9");
       if (shouldBurn) {
         const captionedPath = path.join(OUTPUT_DIR, "final_ad_captioned.mp4");
-        const styleArgs = captionStyleArgs(captionStyle, aspectRatio);
+        const styleArgs = captionStyleArgs(captionStyle, aspectRatio, captionFont);
         try {
           const { execFile } = await import("child_process");
           const { promisify } = await import("util");
@@ -268,13 +461,16 @@ function srtTimestamp(seconds: number): string {
  * Build an SRT file from per-scene voiceover segments + their probed durations.
  * Each segment becomes one cue starting at its scene's cumulative offset.
  * Long lines (>42 chars) are split at the nearest word boundary.
+ * When a branded opener is prepended, pass its duration as `leadInSec` so
+ * caption timestamps align with the final video timeline (opener + clips).
  */
 function buildSrtFromSegments(
   segments: VoiceoverSegment[],
-  actualDurations: number[]
+  actualDurations: number[],
+  leadInSec = 0
 ): string {
   const blocks: string[] = [];
-  let cumulative = 0;
+  let cumulative = leadInSec;
   const offsets: number[] = [];
   for (let i = 0; i < actualDurations.length; i++) {
     offsets.push(cumulative);
@@ -283,7 +479,7 @@ function buildSrtFromSegments(
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
-    const start = offsets[seg.sceneIndex] ?? 0;
+    const start = offsets[seg.sceneIndex] ?? leadInSec;
     const end = start + (actualDurations[seg.sceneIndex] || 5);
     const text = wrapCaptionText(seg.text, 42);
     blocks.push(`${i + 1}\n${srtTimestamp(start)} --> ${srtTimestamp(end)}\n${text}\n`);
@@ -319,10 +515,14 @@ function wrapCaptionText(text: string, maxChars: number): string {
  * Per-style libass `force_style` string for the FFmpeg `subtitles` filter.
  * Aspect-aware vertical positioning — captions sit in the lower-third for 16:9,
  * but higher up (mid-third) for vertical/square to stay above platform UI.
+ *
+ * `brandFont` (optional) overrides the style's default font so captions inherit
+ * the brand body font set in Brand Hub. Falls back to per-style defaults.
  */
 function captionStyleArgs(
   style: "modern" | "tiktok" | "cinematic",
-  aspectRatio: AspectRatio
+  aspectRatio: AspectRatio,
+  brandFont?: string
 ): string {
   // MarginV is the bottom margin in pixels. Vertical formats need bigger
   // margin so captions land in the thumb-safe area, not behind the IG UI.
@@ -332,14 +532,14 @@ function captionStyleArgs(
   switch (style) {
     case "tiktok":
       // Bold sans-serif, yellow highlight, black outline. Centered.
-      return `FontName=Arial,FontSize=${fontSize + 4},Bold=1,PrimaryColour=&H00FFFF00,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=0,Alignment=2,MarginV=${marginV}`;
+      return `FontName=${brandFont || "Arial"},FontSize=${fontSize + 4},Bold=1,PrimaryColour=&H00FFFF00,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=0,Alignment=2,MarginV=${marginV}`;
     case "cinematic":
       // Italic serif, semi-transparent background, lower-third.
-      return `FontName=Georgia,FontSize=${fontSize},Italic=1,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=${marginV}`;
+      return `FontName=${brandFont || "Georgia"},FontSize=${fontSize},Italic=1,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=${marginV}`;
     case "modern":
     default:
       // White sans-serif, black outline, drop shadow. Apple/Linear style.
-      return `FontName=Helvetica,FontSize=${fontSize},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=${marginV}`;
+      return `FontName=${brandFont || "Helvetica"},FontSize=${fontSize},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=${marginV}`;
   }
 }
 

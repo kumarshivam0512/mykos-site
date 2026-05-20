@@ -1,0 +1,167 @@
+#!/usr/bin/env node
+// ─── Music Library Downloader (Sprint A item 2) ──────────────────
+//
+// Pulls all tracks listed in `scripts/music-manifest.json` to `public/music/`
+// and `public/music/ambient/`, then auto-generates `public/music/LICENSES.md`.
+//
+// USAGE:
+//   node scripts/download-music.mjs
+//
+// PROPERTIES:
+//   • Idempotent — skips files that already exist on disk
+//   • Tolerant — logs failures but doesn't abort the run
+//   • Honest — writes LICENSES.md only for files that successfully downloaded
+//   • Zero deps — uses Node built-ins (no npm install needed)
+//
+// LICENSE: All tracks listed in music-manifest.json are sourced from Pixabay
+// under the Pixabay Content License (CC0-equivalent: commercial use OK,
+// no attribution required). The generated LICENSES.md provides the full
+// audit trail for compliance.
+
+import fs from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import path from "node:path";
+import https from "node:https";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT = path.resolve(__dirname, "..");
+const MUSIC_DIR = path.join(ROOT, "public", "music");
+const AMBIENT_DIR = path.join(MUSIC_DIR, "ambient");
+const MANIFEST_PATH = path.join(__dirname, "music-manifest.json");
+
+/** Stream a single URL to a file path, following redirects up to 5 hops. */
+function download(url, dest, hops = 0) {
+  return new Promise((resolve, reject) => {
+    if (hops > 5) return reject(new Error(`Too many redirects: ${url}`));
+    const req = https.get(url, {
+      headers: {
+        // Pixabay CDN can 403 default Node user-agent — pose as a real browser
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "audio/mpeg, */*",
+      },
+    }, (res) => {
+      // Follow 3xx redirects
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        const next = new URL(res.headers.location, url).toString();
+        return resolve(download(next, dest, hops + 1));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+      }
+      const file = createWriteStream(dest);
+      res.pipe(file);
+      file.on("finish", () => file.close(() => resolve()));
+      file.on("error", (err) => reject(err));
+    });
+    req.on("error", reject);
+    req.setTimeout(60_000, () => req.destroy(new Error(`Timeout downloading ${url}`)));
+  });
+}
+
+async function ensureDir(p) {
+  await fs.mkdir(p, { recursive: true });
+}
+
+async function exists(p) {
+  try { await fs.access(p); return true; } catch { return false; }
+}
+
+async function downloadEntry(entry, destDir, filename) {
+  const dest = path.join(destDir, filename);
+  if (await exists(dest)) {
+    const stat = await fs.stat(dest);
+    if (stat.size > 0) {
+      console.log(`✓ ${filename} (already present, ${(stat.size / 1024).toFixed(0)} KB)`);
+      return { ok: true, skipped: true, dest, size: stat.size };
+    }
+  }
+  try {
+    await download(entry.url, dest);
+    const stat = await fs.stat(dest);
+    if (stat.size < 80_000) {
+      throw new Error(`Downloaded file is suspiciously small (${stat.size} bytes) — likely an error page, paywall, or moved track`);
+    }
+    console.log(`✓ ${filename} (${(stat.size / 1024).toFixed(0)} KB)`);
+    return { ok: true, skipped: false, dest, size: stat.size };
+  } catch (err) {
+    console.warn(`✗ ${filename} — ${err.message}`);
+    // Clean up partial file so we retry on next run
+    try { await fs.unlink(dest); } catch { /* ignore */ }
+    return { ok: false, error: err.message };
+  }
+}
+
+async function writeLicenses(manifest, results) {
+  const ok = results.filter((r) => r.ok);
+  const lines = [
+    "# Music Library Licenses",
+    "",
+    "All audio in this directory is **royalty-free** under the **Pixabay Content License**:",
+    "",
+    "> The Pixabay License allows commercial use of all Pixabay content for free, without attribution.",
+    "> See https://pixabay.com/service/license-summary/ for the full terms.",
+    "",
+    "## Tracks",
+    "",
+    "| File | Title | Source URL | License |",
+    "| ---- | ----- | ---------- | ------- |",
+    ...manifest.tracks
+      .filter((t) => ok.some((r) => r.dest && path.basename(r.dest) === `${t.id}.mp3`))
+      .map((t) => `| \`${t.id}.mp3\` | ${t.title} | [Pixabay](${t.pageUrl}) | ${t.license} |`),
+    "",
+    "## Ambient Beds",
+    "",
+    "| File | Title | Source URL | License |",
+    "| ---- | ----- | ---------- | ------- |",
+    ...manifest.ambient
+      .filter((a) => ok.some((r) => r.dest && path.basename(r.dest) === a.file))
+      .map((a) => `| \`ambient/${a.file}\` | ${a.title} | [Pixabay](${a.pageUrl}) | ${a.license} |`),
+    "",
+    `Generated by \`scripts/download-music.mjs\` on ${new Date().toISOString().slice(0, 10)}.`,
+    "",
+  ];
+  await fs.writeFile(path.join(MUSIC_DIR, "LICENSES.md"), lines.join("\n"), "utf-8");
+  console.log(`\n→ Wrote ${path.join("public", "music", "LICENSES.md")}`);
+}
+
+async function main() {
+  const raw = await fs.readFile(MANIFEST_PATH, "utf-8");
+  const manifest = JSON.parse(raw);
+  await ensureDir(MUSIC_DIR);
+  await ensureDir(AMBIENT_DIR);
+
+  console.log(`\nDownloading music library to ${path.relative(ROOT, MUSIC_DIR)}...\n`);
+
+  const results = [];
+  for (const t of manifest.tracks) {
+    results.push(await downloadEntry(t, MUSIC_DIR, `${t.id}.mp3`));
+  }
+
+  console.log(`\nDownloading ambient beds to ${path.relative(ROOT, AMBIENT_DIR)}...\n`);
+  for (const a of manifest.ambient) {
+    results.push(await downloadEntry(a, AMBIENT_DIR, a.file));
+  }
+
+  await writeLicenses(manifest, results);
+
+  const okCount = results.filter((r) => r.ok).length;
+  const failCount = results.length - okCount;
+  console.log(`\nDone. ${okCount} / ${results.length} files ready. ${failCount} failed (will be retried next run).`);
+
+  if (failCount > 0) {
+    console.log(`\nNote: Pixabay CDN URLs sometimes 403/move. To fix a single track:`);
+    console.log(`  1. Browse the pageUrl in scripts/music-manifest.json`);
+    console.log(`  2. Right-click the player → "Copy audio address"`);
+    console.log(`  3. Update the "url" field in the manifest`);
+    console.log(`  4. Re-run: node scripts/download-music.mjs`);
+  }
+}
+
+main().catch((err) => {
+  console.error(`\nFATAL: ${err.message}`);
+  process.exit(1);
+});
