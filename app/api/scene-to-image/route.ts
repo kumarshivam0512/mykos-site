@@ -9,6 +9,15 @@ import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
 
+// Give the route ample headroom — WaveSpeed can take 60-90s per scene and
+// we run scenes in parallel (concurrency 3), so worst case ~3min for 6 scenes.
+export const maxDuration = 300;
+
+// How many scenes to render in parallel. WaveSpeed handles this fine and it
+// converts a sequential N×60s walk into a max(60s, 60s, 60s) parallel burst.
+// Lower if you see provider rate-limit errors; raise if WaveSpeed is happy.
+const SCENE_CONCURRENCY = 3;
+
 const OUTPUT_DIR = path.join(process.cwd(), "public", "output");
 
 interface SceneInput {
@@ -123,12 +132,16 @@ export async function POST(req: NextRequest) {
     const errors: { index: number; message: string }[] = [];
     let totalCostUsd = 0;
 
-    for (let i = 0; i < scenes.length; i++) {
-      // Skip indices that already succeeded in a prior run
-      if (images[i]) continue;
+    // ── Parallelization (20 May 2026) ────────────────────────────────
+    // Previously we ran scenes one-at-a-time with a 1.5s gap between each,
+    // turning 3 × 60s WaveSpeed calls into a 180s+ wall-clock wait that
+    // routinely tripped the 360s client timeout. Now we run up to
+    // SCENE_CONCURRENCY scenes in parallel using a simple promise-pool.
+    // Indices that already have an image (resume case) are skipped.
+    const pendingIndices: number[] = [];
+    for (let i = 0; i < scenes.length; i++) if (!images[i]) pendingIndices.push(i);
 
-      if (i > 0) await new Promise((r) => setTimeout(r, 1500));
-
+    const renderOne = async (i: number): Promise<void> => {
       const sceneInput = scenes[i];
       const scene = sceneInputToScene(sceneInput, i);
 
@@ -136,8 +149,18 @@ export async function POST(req: NextRequest) {
       const adFormat = moodToAdFormat(sceneInput.mood);
       const publicCharacterRefUrl = toPublicUrl(req, sceneInput.characterRefUrl);
 
+      // ── Bug 2 fix (20 May 2026) ──────────────────────────────────────
+      // When the user attaches a real character photo, the generic Gemini-
+      // generated `characterSheet` text (e.g. "athletic woman, mid-30s")
+      // FIGHTS the photo at render time. The model gets two sources of
+      // identity and sometimes picks the text — producing a random person
+      // of the wrong gender. We replace the text with a short identity-
+      // anchor instruction; the photo carries the actual identity.
+      const effectiveCharacterSheet = publicCharacterRefUrl
+        ? "Render the exact person shown in the attached character reference photo. Match their face, skin tone, hair, build, age, and gender. Do not invent or generalize."
+        : characterSheet;
+
       try {
-        // Route through orchestrator (tier-selector picks the right model)
         const result = await orchestrateImage({
           scene,
           brandKit,
@@ -147,7 +170,7 @@ export async function POST(req: NextRequest) {
           cameraSettings: { focalLength: "85mm", aperture: "f/2.0", colorGrade: sceneInput.colorGrade },
           adFormat,
           sceneBackdrop: effectiveBackdrop,
-          characterSheet,
+          characterSheet: effectiveCharacterSheet,
           realism,
           inputs: {
             productImageUrls: publicProductUrls,
@@ -160,7 +183,6 @@ export async function POST(req: NextRequest) {
 
         totalCostUsd += result.estimatedCostUsd;
 
-        // Save to disk — resize to the aspect's target dimensions.
         const outputPath = path.join(OUTPUT_DIR, `scene_${i}.png`);
         const finalBuffer = await sharp(result.buffer).resize(dims.width, dims.height, { fit: "cover" }).png().toBuffer();
         await fs.writeFile(outputPath, finalBuffer);
@@ -180,7 +202,20 @@ export async function POST(req: NextRequest) {
         errors.push({ index: i, message });
         // continue — let other scenes succeed so the user can resume just the failures
       }
-    }
+    };
+
+    // Simple bounded-concurrency pool: keep SCENE_CONCURRENCY workers
+    // pulling from the shared queue until all pending indices are done.
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < pendingIndices.length) {
+        const myIdx = cursor++;
+        const sceneIdx = pendingIndices[myIdx];
+        await renderOne(sceneIdx);
+      }
+    };
+    const workerCount = Math.min(SCENE_CONCURRENCY, pendingIndices.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
     // Record actual cost for cost-cap accounting
     recordCost(req, totalCostUsd);

@@ -87,8 +87,13 @@ const briefSchema: Schema = {
           motion: { type: SchemaType.STRING },
           lighting: { type: SchemaType.STRING },
           duration: { type: SchemaType.NUMBER },
+          // Per-scene on-camera dialogue (lip-synced by native-audio video
+          // models like Seedance 2.0 / Kling 2.5 Turbo Pro). Empty string
+          // is valid for silent / product-only scenes.
+          dialog: { type: SchemaType.STRING },
+          voiceTone: { type: SchemaType.STRING },
         },
-        required: ["index", "visualPrompt", "cameraAngle", "motion", "lighting", "duration"],
+        required: ["index", "visualPrompt", "cameraAngle", "motion", "lighting", "duration", "dialog", "voiceTone"],
       },
     },
     voiceoverScript: { type: SchemaType.STRING },
@@ -236,8 +241,27 @@ Lighting: Specific setup referencing the backdrop (e.g., "softbox key light came
 
 IMPORTANT: Each scene is a 5-second clip. Subject motion must be SMALL — what the source image physically supports. No scene should require the character to walk, run, dance, or dramatically change position.
 
-## 10. VOICEOVER SCRIPT
-Compelling narration timed to scenes with emotional beats
+DIALOG (per scene — spoken ON CAMERA by the character, lip-synced by the video model):
+For each scene, write 1–2 short sentences the character says out loud. Pacing budget = ~2.4 words per second of scene duration (a 5s scene = ~12 words MAX; a 10s scene = ~24 words). Going over makes the lip-sync rush and sound robotic.
+- Match the adFormat:
+  - testimonial_ugc: casual, first-person, use contractions and small filler words ("like", "honestly", "okay so"). Talk about a specific moment, feeling, or result — not the product abstractly. Example: "Okay so I've been using this for like three weeks and honestly my skin's never looked better."
+  - cinematic_lifestyle / minimalist_editorial: sparse, evocative, one sentence max per scene. Often best with no dialog at all on the middle scenes, just opening/closing lines.
+  - product_showcase / energetic_sports: confident second-person, action verbs. Example: "Built for the work that builds you."
+  - animated_explainer: clear declarative sentences explaining ONE benefit per scene.
+- BANNED phrases (never write these): "experience the difference", "unleash your potential", "discover", "introducing", "revolutionary", "game-changing", "transform your life", any sentence starting with "In a world where".
+- If the scene has no human character (product-only, abstract shots), set dialog to empty string "".
+- The opening scene and closing scene are highest priority for dialog; middle scenes can be silent for cinematic breathing room.
+
+VOICE TONE (per scene — 8–15 words describing the voice that delivers the dialog):
+Describe gender, age range, accent, delivery style. Be specific.
+Examples:
+  - UGC: "Young woman, late 20s, warm casual American English, slightly breathy, friendly, selfie-cam intimate"
+  - Cinematic: "Mature male voiceover, deep resonant English, calm and confident, BBC documentary tone"
+  - Sports: "Male, early 30s, energetic American English, slightly raspy, motivational coach delivery"
+If dialog is empty, set voiceTone to empty string too.
+
+## 10. VOICEOVER SCRIPT (legacy single-blob narration for post-production TTS)
+Compilation of all per-scene dialogs concatenated, OR a separate narrator script if the ad uses a non-character narrator (cinematic_lifestyle often does). Used as fallback when native-audio video model isn't selected.
 
 ## 11. MUSIC DIRECTION
 Genre, tempo (BPM), mood, instruments, reference tracks

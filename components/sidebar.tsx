@@ -1,189 +1,115 @@
 "use client";
 
+// ─── Sidebar (Phase A3 — context-aware) ─────────────────────────
+//
+// The sidebar focuses on NAVIGATION ONLY. Workspace selection moved to the
+// TopBar. The sections shown depend on context:
+//
+//   • Signed-out / no brand:   minimal — Home, Sign in
+//   • Brand active:            brand-scoped nav — Dashboard, Campaigns,
+//                              Brand Library, Analytics
+//   • Inside a campaign:       brand nav + campaign workflow rail
+//                              (workflow rail wired in Phase D)
+//
+// Visual: 224px expanded / 64px collapsed (icons only). No section badges.
+// Each item has an icon + label so collapsed mode is still legible.
+
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { useSession, signOut } from "next-auth/react";
 import {
-  Sparkles,
-  BarChart3,
-  FolderOpen,
-  Target,
-  Film,
-  Users,
-  FileText,
   ChevronLeft,
   ChevronRight,
   Home,
-  Zap,
-  LogOut,
-  LogIn,
   Building2,
-  Image,
-  UserCircle,
+  Palette,
+  TrendingUp,
+  Image as ImageIcon,
+  Video,
+  Users,
+  MapPin,
+  Layers,
+  Target,
   Swords,
   Globe,
-  Palette,
-  Video,
-  TrendingUp,
 } from "lucide-react";
+import { useActiveBrand, useActiveCampaign } from "@/lib/hooks/use-workspace";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
-  children?: { label: string; href: string }[];
+  badge?: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: <Home className="w-5 h-5" /> },
-  {
-    label: "Brand Hub",
-    href: "/brand",
-    icon: <Building2 className="w-5 h-5" />,
-    children: [
-      { label: "Brand Setup", href: "/brand" },
-      { label: "Audience Intel", href: "/brand/audience" },
-      { label: "Competitors", href: "/brand/competitors" },
-      { label: "Platform Strategy", href: "/brand/platforms" },
-    ],
-  },
-  {
-    label: "Creative Hub",
-    href: "/creative",
-    icon: <Palette className="w-5 h-5" />,
-    children: [
-      { label: "Scene Builder", href: "/creative" },
-      { label: "Poster Studio", href: "/creative/poster" },
-      { label: "Video Studio", href: "/creative/video" },
-      { label: "Character Library", href: "/creative/characters" },
-      { label: "Location Library", href: "/creative/locations" },
-    ],
-  },
-  {
-    label: "Performance Hub",
-    href: "/performance",
-    icon: <TrendingUp className="w-5 h-5" />,
-    children: [
-      { label: "Analytics", href: "/performance/analytics" },
-      { label: "Campaigns", href: "/performance/campaigns" },
-      { label: "AI Recommendations", href: "/performance/recommendations" },
-    ],
-  },
-];
+interface NavSection {
+  title?: string;
+  items: NavItem[];
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { brand } = useActiveBrand();
+  const { campaign } = useActiveCampaign();
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string | null>("Creative Studio");
+
+  // Hide sidebar on the login page.
+  if (pathname === "/login") return null;
+
+  // Compose nav based on context.
+  const sections = buildSections({ hasBrand: !!brand, hasCampaign: !!campaign });
 
   return (
     <aside
-      className={`${
-        collapsed ? "w-16" : "w-56"
-      } bg-card border-r border-border flex flex-col shrink-0 transition-all duration-200`}
+      className={`${collapsed ? "w-16" : "w-56"} bg-card border-r border-border flex flex-col shrink-0 transition-all duration-200`}
     >
-      {/* Logo */}
-      <div className="p-4 flex items-center gap-2 border-b border-border">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
-          <Zap className="w-4 h-4 text-primary-foreground" />
-        </div>
-        {!collapsed && (
-          <span className="font-bold text-lg tracking-tight">Mykos AI</span>
-        )}
-      </div>
-
-      {/* Nav Items */}
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-          const isSection = !!item.children;
-          const isExpanded = expandedSection === item.label;
-
-          return (
-            <div key={item.label}>
-              <button
-                onClick={() => {
-                  if (isSection) {
-                    setExpandedSection(isExpanded ? null : item.label);
-                    if (collapsed) setCollapsed(false);
-                  } else {
-                    router.push(item.href);
-                  }
-                }}
-                title={collapsed ? item.label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                  isActive && !isSection
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
-              >
-                <span className="shrink-0">{item.icon}</span>
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">{item.label}</span>
-                    {isSection && (
-                      <ChevronRight
-                        className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                      />
-                    )}
-                  </>
-                )}
-              </button>
-
-              {/* Children */}
-              {isSection && isExpanded && !collapsed && (
-                <div className="ml-6 mt-1 space-y-0.5 border-l border-border pl-3">
-                  {item.children!.map((child) => {
-                    const childActive = pathname === child.href;
-                    return (
-                      <button
-                        key={child.href}
-                        onClick={() => router.push(child.href)}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                          childActive
-                            ? "text-primary font-medium bg-primary/5"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {child.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* User + Collapse */}
-      <div className="p-2 border-t border-border space-y-1">
-        {session?.user ? (
-          <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} px-3 py-2`}>
-            {!collapsed && (
-              <div className="min-w-0">
-                <p className="text-xs font-medium truncate">{session.user.name || session.user.email}</p>
-                <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+      {/* Nav */}
+      <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+        {sections.map((section, sIdx) => (
+          <div key={section.title ?? `unnamed-${sIdx}`}>
+            {!collapsed && section.title && (
+              <div className="px-3 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+                {section.title}
               </div>
             )}
-            <button onClick={() => signOut()} title="Sign out" className="text-muted-foreground hover:text-foreground shrink-0">
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => router.push(item.href)}
+                    title={collapsed ? item.label : undefined}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      isActive
+                        ? "bg-brand/10 text-brand font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <span className="shrink-0">{item.icon}</span>
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left truncate">{item.label}</span>
+                        {item.badge && (
+                          <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded-full">
+                            {item.badge}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        ) : (
-          <button
-            onClick={() => router.push("/login")}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-secondary"
-          >
-            <LogIn className="w-4 h-4" />
-            {!collapsed && <span>Sign In</span>}
-          </button>
-        )}
+        ))}
+      </nav>
+
+      {/* Collapse toggle */}
+      <div className="p-2 border-t border-border">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           {!collapsed && <span>Collapse</span>}
@@ -191,4 +117,56 @@ export default function Sidebar() {
       </div>
     </aside>
   );
+}
+
+function buildSections({ hasBrand, hasCampaign }: { hasBrand: boolean; hasCampaign: boolean }): NavSection[] {
+  const sections: NavSection[] = [];
+
+  // Always-on top section.
+  sections.push({
+    items: [
+      { label: "Dashboard", href: "/", icon: <Home className="w-4 h-4" /> },
+    ],
+  });
+
+  if (hasBrand) {
+    sections.push({
+      title: "Brand",
+      items: [
+        { label: "Brand kit", href: "/brand", icon: <Building2 className="w-4 h-4" /> },
+        { label: "Audience", href: "/brand/audience", icon: <Target className="w-4 h-4" /> },
+        { label: "Competitors", href: "/brand/competitors", icon: <Swords className="w-4 h-4" /> },
+        { label: "Platforms", href: "/brand/platforms", icon: <Globe className="w-4 h-4" /> },
+      ],
+    });
+    sections.push({
+      title: "Library",
+      items: [
+        { label: "Characters", href: "/creative/characters", icon: <Users className="w-4 h-4" /> },
+        { label: "Locations", href: "/creative/locations", icon: <MapPin className="w-4 h-4" /> },
+      ],
+    });
+  }
+
+  if (hasCampaign) {
+    sections.push({
+      title: "Campaign",
+      items: [
+        { label: "Scenes", href: "/creative", icon: <Layers className="w-4 h-4" /> },
+        { label: "Video", href: "/creative/video", icon: <Video className="w-4 h-4" /> },
+        { label: "Poster", href: "/creative/poster", icon: <ImageIcon className="w-4 h-4" /> },
+        { label: "Post studio", href: "/creative/post", icon: <Palette className="w-4 h-4" /> },
+      ],
+    });
+  }
+
+  sections.push({
+    title: "Analytics",
+    items: [
+      { label: "Campaigns", href: "/performance/campaigns", icon: <Layers className="w-4 h-4" /> },
+      { label: "Performance", href: "/performance/analytics", icon: <TrendingUp className="w-4 h-4" /> },
+    ],
+  });
+
+  return sections;
 }

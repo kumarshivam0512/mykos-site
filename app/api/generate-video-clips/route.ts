@@ -7,6 +7,16 @@ import { estimateCampaignCost } from "@/lib/providers/tier-selector";
 import path from "path";
 import fs from "fs/promises";
 
+// Video generation is the slowest, most expensive step. Each scene polls
+// WaveSpeed for up to 360s, so even with parallelism we need ~6–7 min of
+// runtime headroom on the route itself.
+export const maxDuration = 600;
+
+// How many video clips to render in parallel. Video providers (WaveSpeed,
+// Higgsfield, Replicate) are stricter on QPS than image endpoints, so we
+// default to 2 concurrent in-flight clips. Override with VIDEO_CLIP_CONCURRENCY.
+const CLIP_CONCURRENCY = Math.max(1, Number(process.env.VIDEO_CLIP_CONCURRENCY ?? 2));
+
 const OUTPUT_DIR = path.join(process.cwd(), "public", "output");
 
 /**
@@ -120,12 +130,16 @@ export async function POST(req: NextRequest) {
       console.log(`[VideoClips] Hero Frame: scene ${heroFrameIdx + 1} added as identity reference (each clip still animates its own scene)`);
     }
 
-    for (let i = 0; i < count; i++) {
-      // Skip indices that already succeeded in a prior run
-      if (clipPaths[i]) continue;
+    // ── Parallelization (20 May 2026) ────────────────────────────────
+    // Previously this loop ran scene-by-scene with a 1.5s stagger between
+    // each, so a 4-scene 5s-per-clip campaign blocked for 4 × ~90s = 6 min+
+    // and routinely tripped the 360s client timeout. We now use a bounded
+    // promise-pool (CLIP_CONCURRENCY workers) so wall-clock time is roughly
+    // max-of-slowest-batch instead of sum-of-all.
+    const pendingIndices: number[] = [];
+    for (let i = 0; i < count; i++) if (!clipPaths[i]) pendingIndices.push(i);
 
-      if (i > 0) await new Promise((r) => setTimeout(r, 1500));
-
+    const renderOne = async (i: number): Promise<void> => {
       // Each clip animates its OWN scene image. The hero frame is NOT used
       // as the source — that would just produce 4 copies of the hero clip.
       const sourceImageUrl = sourceUrls?.[i] || toPublicUrl(req, images[i]);
@@ -172,6 +186,25 @@ export async function POST(req: NextRequest) {
         errors.push({ index: i, message });
         // continue — let the rest succeed so the user can resume just the failures
       }
+    };
+
+    // Bounded-concurrency promise pool: CLIP_CONCURRENCY workers each pull
+    // the next pending index off the queue until empty. Staggers each worker's
+    // first call by 750ms × worker_id so we don't slam the provider with
+    // simultaneous submits (which sometimes triggers per-second rate limits).
+    let cursor = 0;
+    const worker = async (workerId: number): Promise<void> => {
+      if (workerId > 0) await new Promise((r) => setTimeout(r, workerId * 750));
+      while (cursor < pendingIndices.length) {
+        const myIdx = cursor++;
+        const sceneIdx = pendingIndices[myIdx];
+        await renderOne(sceneIdx);
+      }
+    };
+    const workerCount = Math.min(CLIP_CONCURRENCY, pendingIndices.length);
+    if (workerCount > 0) {
+      console.log(`[VideoClips] Rendering ${pendingIndices.length} clip(s) with ${workerCount} parallel worker(s)`);
+      await Promise.all(Array.from({ length: workerCount }, (_, w) => worker(w)));
     }
 
     // Record actual cost for cost-cap accounting

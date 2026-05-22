@@ -5,6 +5,8 @@
   --foreground: #fafafa;
   --card: #18181b;
   --card-foreground: #fafafa;
+  /* Mykos defaults — overridden by BrandAccentProvider when a brand is active.
+     Using HSL components for primary so we can derive hover/focus variants. */
   --primary: #a855f7;
   --primary-foreground: #fafafa;
   --secondary: #27272a;
@@ -14,7 +16,21 @@
   --border: #27272a;
   --ring: #a855f7;
   --accent: #7c3aed;
+  /* Brand-aware variables — re-bound by <BrandAccentProvider> when a Brand
+     is active. Falls back to Mykos defaults otherwise so chrome stays consistent
+     when the user is brand-less (signed-out, first-time, etc.). */
+  --brand-primary: var(--primary);
+  --brand-secondary: var(--accent);
 }
+
+/* Brand-aware utilities — components use these instead of bg-primary/text-primary
+   where they want to follow the active brand. Pure CSS, no Tailwind plugin needed. */
+.bg-brand { background-color: var(--brand-primary); }
+.text-brand { color: var(--brand-primary); }
+.border-brand { border-color: var(--brand-primary); }
+.ring-brand { --tw-ring-color: var(--brand-primary); }
+.from-brand { --tw-gradient-from: var(--brand-primary); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(0,0,0,0)); }
+.to-brand-secondary { --tw-gradient-to: var(--brand-secondary); }
 
 @theme inline {
   --color-background: var(--background);

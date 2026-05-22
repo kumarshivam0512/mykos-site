@@ -94,6 +94,30 @@ const MODEL_DURATION_LIMITS: Record<string, { min: number; max: number }> = {
 };
 
 /**
+ * Which model IDs natively generate audio (speech + ambient + foley) along
+ * with the video. When true we send the dialog block in the prompt and
+ * remove the "no chatter" negatives. When false the model is silent and we
+ * rely on TTS in post.
+ *
+ * Source: WaveSpeed model docs + live testing (20 May 2026).
+ *   - Kling 2.5 Turbo Pro: yes, lip-sync + ambient
+ *   - Seedance 2.0:        yes, lip-sync + ambient + foley
+ *   - Wan 2.2 / 2.7:       no
+ *   - Seedance v1 Lite:    no (older release, silent)
+ */
+const NATIVE_AUDIO_MODELS = new Set<string>([
+  "kwaivgi/kling-v2.5-turbo-pro/image-to-video",
+  "kwaivgi/kling-v2.5-turbo-pro/text-to-video",
+  "bytedance/seedance-2.0/image-to-video",
+  "bytedance/seedance-2.0/text-to-video",
+]);
+
+/** True when this WaveSpeed model can generate native audio for the clip. */
+export function modelSupportsNativeAudio(modelId: string): boolean {
+  return NATIVE_AUDIO_MODELS.has(modelId);
+}
+
+/**
  * Clamp the requested duration to the model's supported range and log when we
  * have to. Kling/Seedance Lite snap to 5 or 10 — if user picks 8s, we round to
  * the nearest valid bucket rather than silently passing a value the model
@@ -144,9 +168,10 @@ export async function generateVideoI2V(
   realism?: RealismSettings,
   opts: WaveSpeedVideoOpts = {}
 ): Promise<WaveSpeedResult> {
-  const basePrompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
-  const prompt = optimizePromptForModel(basePrompt, VIDEO_TIER_TARGET[tier], realism);
   const modelId = I2V_TIER_MODELS[tier];
+  const nativeAudio = modelSupportsNativeAudio(modelId);
+  const basePrompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism, nativeAudio);
+  const prompt = optimizePromptForModel(basePrompt, VIDEO_TIER_TARGET[tier], realism);
 
   const body: Record<string, unknown> = {
     prompt,
@@ -173,9 +198,10 @@ export async function generateVideoT2V(
   realism?: RealismSettings,
   opts: WaveSpeedVideoOpts = {}
 ): Promise<WaveSpeedResult> {
-  const basePrompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
-  const prompt = optimizePromptForModel(basePrompt, VIDEO_TIER_TARGET[tier], realism);
   const modelId = T2V_TIER_MODELS[tier];
+  const nativeAudio = modelSupportsNativeAudio(modelId);
+  const basePrompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism, nativeAudio);
+  const prompt = optimizePromptForModel(basePrompt, VIDEO_TIER_TARGET[tier], realism);
 
   const body: Record<string, unknown> = {
     prompt,
@@ -210,10 +236,11 @@ export async function generateVideoRefToVideo(
     throw new Error("generateVideoRefToVideo requires at least one reference image URL");
   }
 
-  const basePrompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism);
+  const modelId = REF_TO_VIDEO_MODELS[tier];
+  const nativeAudio = modelSupportsNativeAudio(modelId);
+  const basePrompt = buildVideoPrompt(scene, cameraSettings, adFormat, hasProductImage, sceneBackdrop, characterSheet, realism, nativeAudio);
   const prompt = optimizePromptForModel(basePrompt, REF_TIER_TARGET[tier], realism);
   const refs = refImageUrls.slice(0, 9); // cap at 9
-  const modelId = REF_TO_VIDEO_MODELS[tier];
 
   // WaveSpeed ref-to-video models expect the field "reference_images" (not "images"
   // which belongs to image-edit models). Verified live against the API error:

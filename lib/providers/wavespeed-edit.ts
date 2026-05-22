@@ -116,12 +116,18 @@ function buildMultiRefPrompt(
       refIndex += count;
     }
     if (refs.characterRefUrl) {
-      guidance.push(`Reference image ${refIndex + 1} is the character — they are a SECONDARY subject. Show them interacting with or beside the product, but do NOT crop or obscure the product. Preserve their face and appearance`);
+      // STRONG identity directive even when character is secondary subject —
+      // text characterSheet from Gemini can invent a different person.
+      guidance.push(`Reference image ${refIndex + 1} IS THE IDENTITY OF THIS CHARACTER — render the exact same person from this photo (same face, skin tone, hair, build, age, gender). They are SECONDARY in this frame so show them interacting with or beside the product, but do not crop or obscure the product. Never invent or replace this person`);
       refIndex++;
     }
   } else {
     if (refs.characterRefUrl) {
-      guidance.push(`Reference image ${refIndex + 1} is the character — preserve their face, hair, and overall appearance exactly`);
+      // STRONG identity directive — without this, models will sometimes ignore
+      // the photo and invent a face based on the text description, producing
+      // a random person (often the wrong gender). Verified bug 20 May 2026:
+      // user uploaded Himanshu (male), got a random woman in scenes 1/3/4.
+      guidance.push(`Reference image ${refIndex + 1} IS THE IDENTITY OF THIS CHARACTER — render the exact same person from this photo: same face, skin tone, hair, build, age, gender. Do not invent or replace this person. Treat this reference as the single source of truth for the character`);
       refIndex++;
     }
     if (refs.productImageUrls?.length) {

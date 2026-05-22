@@ -4,6 +4,13 @@ const nextConfig: NextConfig = {
   // Native/binary modules must be loaded via Node's runtime require, not bundled.
   // Adding them here keeps Turbopack/webpack from trying to parse the .exe / .node
   // binaries inside these packages (e.g. ffprobe.exe, sharp's .node addons).
+  //
+  // @remotion/* + esbuild ship per-platform native binaries AND a README inside
+  // each platform package (e.g. @esbuild/win32-x64/README.md). Without externalizing
+  // them, Turbopack tries to parse those non-code files and errors with
+  // "Unknown module type" on the README. They must be loaded via Node require
+  // only — they're only used inside server-side API routes (render-brand-asset,
+  // finalize-video) and never touch client code.
   serverExternalPackages: [
     "sharp",
     "ffmpeg-static",
@@ -12,6 +19,11 @@ const nextConfig: NextConfig = {
     "@ffprobe-installer/darwin-x64",
     "@ffprobe-installer/darwin-arm64",
     "@ffprobe-installer/linux-x64",
+    "@remotion/bundler",
+    "@remotion/renderer",
+    "@remotion/cli",
+    "remotion",
+    "esbuild",
   ],
   images: {
     remotePatterns: [

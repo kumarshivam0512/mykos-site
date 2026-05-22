@@ -262,7 +262,18 @@ export function buildVideoPrompt(
   hasProductImage?: boolean,
   sceneBackdrop?: string,
   characterSheet?: string,
-  realism?: RealismSettings
+  realism?: RealismSettings,
+  /**
+   * Set to `true` for video models that generate native audio (Seedance 2.0,
+   * Kling 2.5 Turbo Pro, Kling 3.0). When true:
+   *   - Strips "no background chatter, no extra music" from the negatives so
+   *     the audio path actually opens.
+   *   - Appends an explicit dialog block when `scene.dialog` is set, asking
+   *     the model to lip-sync the line and deliver it in `scene.voiceTone`.
+   *   - Asks for subtle ambient/Foley matching the scene (no music — music
+   *     is added separately in post so the brand has a single source of truth).
+   */
+  nativeAudio?: boolean
 ): string {
   const namedMove = getNamedMove(scene.motion || "push in");
   const isStatic = namedMove === "camera_fixed";
@@ -317,8 +328,39 @@ export function buildVideoPrompt(
     if (videoCues.length) lines.push(videoCues.join(". "));
   }
 
-  // Negatives
-  lines.push(`Negatives: ${NEGATIVE_BLOCK}, no background chatter, no extra music`);
+  // ── Native audio block ──────────────────────────────────────────
+  // Only emitted for models that can actually generate audio. For silent
+  // models we keep the legacy "no extra music / no chatter" negative so the
+  // output is a clean silent clip ready for TTS in post.
+  if (nativeAudio) {
+    lines.push("");
+    lines.push("Audio: native sound ON for this clip.");
+
+    const hasDialog = !!scene.dialog && scene.dialog.trim().length > 0;
+    if (hasDialog) {
+      // Explicit speech direction. Quoting the line is the most reliable way
+      // we've found to get Seedance/Kling to actually voice the words rather
+      // than mumble approximations of them.
+      lines.push(`Spoken dialogue (the character speaks this on camera, lip-synced): "${scene.dialog!.trim()}"`);
+      if (scene.voiceTone && scene.voiceTone.trim().length > 0) {
+        lines.push(`Voice delivery: ${scene.voiceTone.trim()}.`);
+      }
+      lines.push("Lip movement must match the dialogue exactly. No mumbling, no random vocalizations.");
+    } else {
+      // No dialog → ambient/foley only. Suppress speech explicitly so the
+      // model doesn't invent random chatter.
+      lines.push("No spoken dialogue in this scene. The character does not speak.");
+    }
+
+    lines.push("Ambient: subtle natural sounds matching the location (room tone, soft foley). No background music — music is added in post.");
+
+    // Audio-safe negatives. We drop "no extra music / no background chatter"
+    // because dialogue IS chatter — that negative was kneecapping every clip.
+    lines.push(`Negatives: ${NEGATIVE_BLOCK}, no robotic voice, no audio artifacts, no over-amplified ambient sound`);
+  } else {
+    // Silent-model path: preserve original negatives that suppress all audio.
+    lines.push(`Negatives: ${NEGATIVE_BLOCK}, no background chatter, no extra music`);
+  }
 
   return lines.join("\n");
 }

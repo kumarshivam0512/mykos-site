@@ -33,6 +33,7 @@ const CONTAINER_DEFS: Record<string, string> = {
   characters: "/brandName",
   locations: "/brandName",
   users: "/email",
+  brands: "/userId",
 };
 
 // Auto-create container if it doesn't exist, then cache it
@@ -68,4 +69,8 @@ export function getLocationsContainer(): Promise<Container> {
 
 export function getUsersContainer(): Promise<Container> {
   return ensureContainer("users");
+}
+
+export function getBrandsContainer(): Promise<Container> {
+  return ensureContainer("brands");
 }

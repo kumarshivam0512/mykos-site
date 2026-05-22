@@ -251,13 +251,21 @@ export default function VideoStudioPage() {
       // Build Scene objects for the API
       const apiScenes = scenes.map((_, i) => {
         const motion = sceneMotions[i] || { cameraMove: "push in", motionPrompt: "", duration: 5 };
+        // Pull per-scene dialog + voice tone from the brief so native-audio
+        // video models (Seedance 2.0, Kling 2.5 Turbo Pro) can lip-sync the
+        // line. Falls back to the legacy per-scene voiceoverSegments if the
+        // brief was generated before per-scene dialog was added to the schema.
+        const briefScene = brief?.scenes?.[i];
+        const fallbackVo = brief?.voiceoverSegments?.find((s) => s.sceneIndex === i)?.text;
         return {
           index: i,
-          visualPrompt: motion.motionPrompt || brief?.scenes?.[i]?.visualPrompt || "Product showcased in scene",
+          visualPrompt: motion.motionPrompt || briefScene?.visualPrompt || "Product showcased in scene",
           cameraAngle: brief?.cameraSettings?.focalLength || "85mm",
           motion: motion.cameraMove,
           lighting: "stable from source frame",
           duration: motion.duration,
+          dialog: briefScene?.dialog ?? fallbackVo ?? "",
+          voiceTone: briefScene?.voiceTone ?? "",
         };
       });
 

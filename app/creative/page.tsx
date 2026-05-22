@@ -539,7 +539,12 @@ export default function SceneBuilderPage() {
     } finally {
       setGenerating(false);
     }
-  }, [scenes, productInput, brandKit, brief, productImage, productImageUrl, realism, setAssets, productAngles, logoFile, selectedTier]);
+    // NOTE: dependency array MUST include `generatedImages`, `selectedAspectRatio`,
+    // `hero`. Without `generatedImages`, the useCallback returned a stale closure that
+    // saw the INITIAL empty array on every call — so per-scene regenerate sent
+    // `existingImages: [null, null, null]` and the server regenerated every scene
+    // from scratch instead of skipping the unaffected ones. (Bug 1 fix, 20 May 2026.)
+  }, [scenes, productInput, brandKit, brief, productImage, productImageUrl, realism, setAssets, productAngles, logoFile, selectedTier, generatedImages, selectedAspectRatio, hero]);
 
   return (
     <main className="flex-1 overflow-y-auto">

@@ -83,6 +83,54 @@ export function getAccentColor(kit: BrandKit | undefined): string {
   return kit?.accentColor || kit?.colors?.[2] || "#1e1b4b";
 }
 
+// ─── Brand (first-class entity, Workspace UX sprint) ────────────
+//
+// A Brand is a reusable identity that owns logo, palette, typography, voice,
+// and (eventually) audience archetypes. One user can have many Brands, each
+// Brand can have many Campaigns. This separation eliminates the "re-enter
+// Nike colors for every Nike product" pain point.
+//
+// Cosmos: container `brands`, partition key `/userId`.
+// Stored userId = session.user.email (confirmed with user 20 May 2026).
+export interface Brand {
+  id: string;
+  userId: string;             // session.user.email
+  name: string;               // "Nike", "Bentley", "Avvatar"
+  /** Optional one-liner shown in the brand picker — e.g. "Premium athletic footwear". */
+  description?: string;
+  /** Brand identity kit — colors, fonts, logo, tone, tagline. */
+  kit: BrandKit;
+  /** Default tagline used on end cards when a campaign doesn't override. */
+  tagline?: string;
+  /** Optional homepage URL — used by the enhanced scraper to refresh assets. */
+  websiteUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Soft-delete flag — keeps audit trail without hiding from list queries
+   *  unless explicitly filtered. */
+  archived?: boolean;
+}
+
+/** Helper to build a fresh Brand client-side before POSTing. */
+export function makeBrandSeed(userId: string, name: string, kit?: Partial<BrandKit>): Omit<Brand, "id" | "createdAt" | "updatedAt"> {
+  return {
+    userId,
+    name: name.trim() || "Untitled Brand",
+    kit: {
+      colors: kit?.colors ?? [],
+      fonts: kit?.fonts ?? [],
+      logoUrl: kit?.logoUrl,
+      primaryColor: kit?.primaryColor,
+      secondaryColor: kit?.secondaryColor,
+      accentColor: kit?.accentColor,
+      displayFont: kit?.displayFont,
+      bodyFont: kit?.bodyFont,
+      toneOfVoice: kit?.toneOfVoice,
+      guidelines: kit?.guidelines,
+    },
+  };
+}
+
 // ─── Target Audience ────────────────────────────────────────
 export interface TargetAudience {
   ageRange: string;
@@ -140,6 +188,19 @@ export interface Scene {
   motion: string;
   lighting: string;
   duration: number; // seconds
+  /**
+   * Per-scene on-camera dialogue spoken by the character. Used by video
+   * models that support native audio (Seedance 2.0, Kling 2.5 Turbo Pro)
+   * to drive lip-sync + spoken delivery. Leave empty/undefined for
+   * silent scenes or when audio is added via separate TTS in post.
+   */
+  dialog?: string;
+  /**
+   * Free-form voice direction for native-audio video models. 8–15 words
+   * describing gender, age, accent, delivery (e.g. "young woman, late 20s,
+   * casual American English, warm, slightly breathy, UGC selfie tone").
+   */
+  voiceTone?: string;
 }
 
 // ─── Camera Settings ────────────────────────────────────────
