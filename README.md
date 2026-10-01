@@ -16,7 +16,35 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Research website and workspace
+
+The public research-lab homepage lives at `/`, implemented in `app/page.tsx`
+with scoped styles in `app/research.module.css`. It uses a deep-navy and electric
+blue visual identity and supports keyboard navigation and reduced motion.
+Research directions are expandable disclosures, not claims of published results.
+
+The original brand/campaign dashboard is preserved at `/workspace`. Login and
+internal dashboard links return there. Existing root links containing `c`,
+`brandId`, or `view=workspace` redirect to the workspace with their query values
+preserved. Creative, brand, and performance routes are unchanged.
+
+`components/app-shell.tsx` keeps workspace providers, the top bar, and sidebar
+off the public homepage, so visiting the research site does not fetch account
+or campaign data. Workspace styling remains unchanged.
+
+### Scientific imagery
+
+The locally served images in `public/research/` are illustrative, not Mykos
+facilities or research results:
+
+- `ocean-simulation.jpg`: [North Atlantic ocean turbulence, PIA22256](https://images.nasa.gov/details/PIA22256), NASA/JPL-Caltech.
+- `discover-supercomputer.jpg`: [Discover Supercomputer 3](https://images.nasa.gov/details/GSFC_20171208_Archive_e002030), NASA/Pat Izzo.
+
+Source credits are displayed beside each image. Usage follows
+[NASA's media guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/);
+no affiliation or endorsement is implied. Replace these editorial illustrations
+with lab-owned imagery when available. No researcher profiles, publications,
+institutional affiliations, or performance claims have been invented.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

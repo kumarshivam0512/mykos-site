@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Produce a self-contained server bundle (.next/standalone) for container images.
+  // Required for the Docker / Azure Container Apps deployment so the runtime image
+  // only needs the traced node_modules instead of the full dependency tree.
+  output: "standalone",
   // Native/binary modules must be loaded via Node's runtime require, not bundled.
   // Adding them here keeps Turbopack/webpack from trying to parse the .exe / .node
   // binaries inside these packages (e.g. ffprobe.exe, sharp's .node addons).

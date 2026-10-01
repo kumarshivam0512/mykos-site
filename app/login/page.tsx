@@ -30,7 +30,7 @@ export default function LoginPage() {
     if (result?.error) {
       setError(isSignup ? "Account already exists or invalid data" : "Invalid email or password");
     } else {
-      router.push("/");
+      router.push("/workspace");
       router.refresh();
     }
     setLoading(false);

@@ -1,0 +1,40 @@
+# Dependencies & build artifacts (reinstalled/rebuilt inside the image)
+node_modules
+.next
+out
+build
+
+# Local runtime output (regenerated at runtime; must not bake into image)
+public/output
+public/uploads
+
+# Env & secrets (provided via Container Apps / Key Vault, never baked in)
+.env
+.env.*
+*.pem
+
+# VCS / tooling
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Docs & meta
+docs
+README.md
+AGENTS.md
+CLAUDE.md
+*.md
+
+# Logs & misc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.tsbuildinfo
+.DS_Store
+
+# Docker files themselves
+Dockerfile
+.dockerignore

@@ -23,7 +23,7 @@ export default function AudiencePage() {
       <main className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">Generate a brief first to see audience insights.</p>
-          <button onClick={() => router.push("/")} className="bg-primary text-primary-foreground px-6 py-2 rounded-xl">
+          <button onClick={() => router.push("/workspace")} className="bg-primary text-primary-foreground px-6 py-2 rounded-xl">
             Go to Home
           </button>
         </div>

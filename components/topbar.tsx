@@ -94,7 +94,7 @@ export function TopBar() {
     <header className="h-14 border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60 sticky top-0 z-40">
       <div className="h-full px-3 flex items-center gap-2">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-secondary transition-colors shrink-0">
+        <Link href="/workspace" className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-secondary transition-colors shrink-0">
           <div className="w-7 h-7 bg-brand rounded-md flex items-center justify-center">
             <Zap className="w-4 h-4 text-white" />
           </div>
@@ -363,7 +363,7 @@ function Breadcrumbs({
 }) {
   const crumbs = useMemo(() => {
     // For the home page we show nothing.
-    if (pathname === "/") return [];
+    if (pathname === "/workspace") return [];
     // For /c/[id]/* and /brand/* routes, the workspace picker already shows
     // brand+campaign, so we add only the trailing page label.
     const segments = pathname.split("/").filter(Boolean);

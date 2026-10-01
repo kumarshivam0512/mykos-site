@@ -56,7 +56,7 @@ export default function CampaignsPage() {
         <div className="flex items-center justify-between">
           <div>
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/workspace")}
               className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-sm mb-2"
             >
               <ArrowLeft className="w-4 h-4" /> Home
@@ -69,7 +69,7 @@ export default function CampaignsPage() {
             </p>
           </div>
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/workspace")}
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2.5 rounded-xl flex items-center gap-2"
           >
             New Campaign
@@ -85,7 +85,7 @@ export default function CampaignsPage() {
             <Folder className="w-12 h-12 text-muted-foreground/30 mx-auto" />
             <p className="text-muted-foreground">No campaigns yet</p>
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/workspace")}
               className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2.5 rounded-xl"
             >
               Create Your First Campaign
