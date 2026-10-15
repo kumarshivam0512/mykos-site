@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:marketing": "node scripts/build-marketing.mjs",
+    "deploy:marketing": "node scripts/deploy-marketing.mjs",
     "start": "next start",
     "lint": "eslint",
     "music:download": "node scripts/download-music.mjs"

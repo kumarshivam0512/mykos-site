@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Zap, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,10 +41,8 @@ export default function LoginPage() {
     <main className="flex-1 flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mx-auto">
-            <Zap className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-bold">Mykos AI</h1>
+          <Image src="/mykos-mushroom.svg" alt="" width={56} height={56} className="mx-auto" />
+          <h1 className="text-2xl font-bold">Mykos Research Labs</h1>
           <p className="text-muted-foreground text-sm">
             {isSignup ? "Create your account" : "Sign in to your account"}
           </p>

@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Preview Mykos hero",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev",
+				"--",
+				"--port",
+				"3100"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

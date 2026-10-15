@@ -1,0 +1,94 @@
+.button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  min-height: 43px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 10px 17px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 300ms cubic-bezier(.2, .75, .25, 1), transform 180ms ease;
+}
+
+.compact {
+  min-height: 38px;
+  min-width: 132px;
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+.compact .reveal {
+  gap: 6px;
+}
+
+.compact .reveal svg {
+  width: 14px;
+  height: 14px;
+}
+
+.label,
+.reveal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: transform 260ms cubic-bezier(.2, .75, .25, 1), opacity 180ms ease;
+}
+
+.label {
+  transform: translateX(5px);
+}
+
+.reveal {
+  position: absolute;
+  inset: 0;
+  color: var(--primary-foreground);
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.button:hover,
+.button:focus-visible {
+  background: var(--primary);
+}
+
+.button:hover .label,
+.button:focus-visible .label {
+  opacity: 0;
+  transform: translateX(28px);
+}
+
+.button:hover .reveal,
+.button:focus-visible .reveal {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.button:active {
+  transform: scale(.98);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .label,
+  .reveal {
+    transition: none;
+  }
+}

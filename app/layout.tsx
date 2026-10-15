@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mykos AI — Virtual Marketing Manager",
-  description: "AI-powered creative strategy, ad generation, audience intelligence, and performance analytics",
+  title: "Mykos Research Labs | Agent Memory",
+  description: "Experimental local-first memory for coding agents, grounded in declared source evidence and host-approved checks.",
 };
 
 export default function RootLayout({

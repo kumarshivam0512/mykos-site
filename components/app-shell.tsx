@@ -10,7 +10,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Keep the public research site independent of workspace state and API calls.
-  if (pathname === "/") return children;
+  if (pathname === "/" || pathname.startsWith("/discover/")) return children;
 
   return (
     <Providers>
