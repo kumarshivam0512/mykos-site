@@ -13,7 +13,7 @@
 // Remove or gate behind NODE_ENV in production. Kept zero-styling intentional
 // so it doesn't look like product UI.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import {
   useActiveCampaign,
   useActiveBrand,
@@ -31,7 +31,20 @@ import {
 } from "@/lib/workspace-client";
 import type { Brand } from "@/lib/types";
 
+// Diagnostic page reads `?c=` via useSearchParams and fetches live workspace
+// data, so it can't be statically prerendered — render it on demand and wrap
+// the search-param consumers in a Suspense boundary.
+export const dynamic = "force-dynamic";
+
 export default function WorkspaceProbePage() {
+  return (
+    <Suspense fallback={null}>
+      <WorkspaceProbeInner />
+    </Suspense>
+  );
+}
+
+function WorkspaceProbeInner() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [log, setLog] = useState<string[]>([]);

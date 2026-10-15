@@ -125,7 +125,7 @@ function buildSections({ hasBrand, hasCampaign }: { hasBrand: boolean; hasCampai
   // Always-on top section.
   sections.push({
     items: [
-      { label: "Dashboard", href: "/", icon: <Home className="w-4 h-4" /> },
+      { label: "Dashboard", href: "/workspace", icon: <Home className="w-4 h-4" /> },
     ],
   });
 
